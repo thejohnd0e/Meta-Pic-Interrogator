@@ -1,0 +1,29 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+
+# Build and coverage output
+dist/
+build/
+out/
+coverage/
+.cache/
+
+# Logs and local runtime data
+*.log
+*.tmp
+tmp/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
