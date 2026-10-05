@@ -119,9 +119,38 @@ pub enum AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsDocument {
+    pub schema_version: u32,
+    pub provider_id: Option<String>,
+    pub model_id: Option<String>,
+    pub preset_id: Option<String>,
+}
+
+impl SettingsDocument {
+    pub fn migrate(raw: serde_json::Value) -> AppResult<Self> {
+        let version = raw
+            .get("schemaVersion")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        if version > 1 {
+            return Err(AppError::MalformedResponse(
+                "unsupported settings version".to_owned(),
+            ));
+        }
+        serde_json::from_value(raw)
+            .map(|mut settings: Self| {
+                settings.schema_version = 1;
+                settings
+            })
+            .map_err(|error| AppError::MalformedResponse(error.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AppError, DescriptionDraft, InputImage, Provenance};
+    use super::{AppError, DescriptionDraft, InputImage, Provenance, SettingsDocument};
 
     #[test]
     fn provenance_round_trips_as_json() {
@@ -162,5 +191,13 @@ mod tests {
         let encoded = serde_json::to_string(&AppError::NoVisionSupport("model".to_owned()))
             .expect("errors are serializable");
         assert!(encoded.contains("no_vision_support"));
+    }
+
+    #[test]
+    fn settings_migrate_to_current_schema() {
+        let old = serde_json::json!({ "schemaVersion": 0, "presetId": "concise" });
+        let migrated = SettingsDocument::migrate(old).expect("known settings versions migrate");
+        assert_eq!(migrated.schema_version, 1);
+        assert_eq!(migrated.preset_id.as_deref(), Some("concise"));
     }
 }
