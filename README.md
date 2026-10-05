@@ -1,23 +1,26 @@
-# MetaPic
+# MetaPic Interrogator
 
-MetaPic Interrogator is planned as a Windows desktop application that generates image descriptions with cloud vision services and writes the description plus provenance into a new PNG file.
-
-The repository currently contains documentation only. The approved design is in `docs/superpowers/specs/2026-10-05-meta-pic-interrogator-design.md`; the implementation plan is in `docs/superpowers/plans/2026-10-05-meta-pic-interrogator.md`.
+Windows 10/11 Tauri desktop application for generating image descriptions and saving clean PNG copies with provenance metadata.
 
 ## Setup
 
-Planned stack: Tauri 2, React 19, TypeScript, Rust, and Windows 10/11. Setup commands will be added when the application scaffold is created.
+```text
+npm install
+```
 
-## Usage
+## Development
 
-Usage: TBD.
+```text
+npm run tauri dev
+```
 
-## Build
+## Verification
 
-Build command: TBD.
+```text
+npm run build
+cargo fmt --check
+cargo test
+```
 
-## Testing
-
-Test command: TBD.
-
-See `AGENTS.md` for shared contributor and coding-agent guidance.
+The Rust application is under `src-tauri/`; the React frontend is under `src/`.
+See `AGENTS.md` and the approved design in `docs/superpowers/specs/` for project guidance.

@@ -19,7 +19,6 @@ coverage/
 # Logs and local runtime data
 *.log
 *.tmp
-tmp/
 
 # Editor and operating-system files
 .idea/
@@ -31,3 +30,4 @@ Thumbs.db
 # Local coding-agent state
 .omo/
 .worktrees/
+.superpowers/
