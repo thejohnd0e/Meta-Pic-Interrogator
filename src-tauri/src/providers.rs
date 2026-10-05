@@ -2,6 +2,37 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::{AppError, AppResult, ProviderConfig, VisionCapabilities, VisionModel};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiProviderKind {
+    OpenAi,
+    Anthropic,
+    Gemini,
+    OpenRouter,
+    OpenAiCompatible,
+}
+
+pub fn build_vision_payload(
+    kind: ApiProviderKind,
+    model: &str,
+    prompt: &str,
+    mime: &str,
+    encoded_image: &str,
+) -> serde_json::Value {
+    match kind {
+        ApiProviderKind::OpenAi
+        | ApiProviderKind::OpenRouter
+        | ApiProviderKind::OpenAiCompatible => {
+            serde_json::json!({"model": model, "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": format!("data:{mime};base64,{encoded_image}")}}]}]})
+        }
+        ApiProviderKind::Anthropic => {
+            serde_json::json!({"model": model, "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image", "source": {"type": "base64", "media_type": mime, "data": encoded_image}}]}]})
+        }
+        ApiProviderKind::Gemini => {
+            serde_json::json!({"model": model, "contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": mime, "data": encoded_image}}]}]})
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VisionRequest {
     pub prompt: String,
@@ -240,6 +271,32 @@ mod tests {
         assert_eq!(
             vision_probe(&backend, vec![1]).state,
             CapabilityState::Unavailable
+        );
+    }
+
+    #[test]
+    fn provider_payloads_keep_image_mime_and_encoding() {
+        let payload = build_vision_payload(
+            ApiProviderKind::OpenAi,
+            "vision",
+            "describe",
+            "image/png",
+            "abc",
+        );
+        assert_eq!(
+            payload["messages"][0]["content"][1]["image_url"]["url"],
+            "data:image/png;base64,abc"
+        );
+        let anthropic = build_vision_payload(
+            ApiProviderKind::Anthropic,
+            "vision",
+            "describe",
+            "image/jpeg",
+            "xyz",
+        );
+        assert_eq!(
+            anthropic["messages"][0]["content"][1]["source"]["data"],
+            "xyz"
         );
     }
 }
