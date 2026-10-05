@@ -1,7 +1,9 @@
 mod commands;
+pub mod credentials;
 pub mod domain;
 pub mod image;
 pub mod metadata;
+pub mod settings;
 
 #[tauri::command]
 fn health() -> &'static str {
