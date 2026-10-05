@@ -2,14 +2,28 @@ use crate::domain::{
     AppError, AppResult, DescriptionDraft, ImageInfo, InputImage, Preset, ProviderConfig,
     SaveRequest, VisionCapabilities, VisionModel,
 };
+use crate::{image, metadata};
 
 fn pending<T>(name: &str) -> AppResult<T> {
     Err(AppError::NotImplemented(name.to_owned()))
 }
 
 #[tauri::command]
-pub fn inspect_image(_input: InputImage) -> AppResult<ImageInfo> {
-    pending("inspect_image")
+pub fn inspect_image(input: InputImage) -> AppResult<ImageInfo> {
+    let bytes =
+        std::fs::read(&input.path).map_err(|error| AppError::LocalImage(error.to_string()))?;
+    let decoded = image::decode_supported(
+        &bytes,
+        image::ImageLimits::default(),
+        image::Orientation::TopLeft,
+    )?;
+    Ok(ImageInfo {
+        path: input.path,
+        format: format!("{:?}", decoded.format),
+        width: decoded.width,
+        height: decoded.height,
+        has_alpha: decoded.image.color().has_alpha(),
+    })
 }
 
 #[tauri::command]
@@ -67,6 +81,16 @@ pub fn delete_credential(_provider_id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn save_png_copy(_request: SaveRequest) -> AppResult<String> {
-    pending("save_png_copy")
+pub fn save_png_copy(request: SaveRequest) -> AppResult<String> {
+    let source = std::fs::read(&request.source_path)
+        .map_err(|error| AppError::LocalImage(error.to_string()))?;
+    let decoded = image::decode_supported(
+        &source,
+        image::ImageLimits::default(),
+        image::Orientation::TopLeft,
+    )?;
+    let clean = image::encode_clean_png(&decoded.image)?;
+    let output = metadata::write_metadata_png(&clean, &request.description, &request.provenance)?;
+    metadata::save_verified_png(std::path::Path::new(&request.destination_path), &output)?;
+    Ok(request.destination_path)
 }
