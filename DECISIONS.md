@@ -29,3 +29,15 @@
 - Decision: Keep the full requested cloud provider list in the product model, but enable image requests only after a provider/model vision capability is verified.
 - Reason: LingvoLoc's subscription, xAI, and DeepSeek paths are currently text-oriented; a capability gate avoids falsely advertising unsupported image input without blocking the app release.
 - Status: Active.
+
+## 2026-10-05: Keep Provider Commands Capability-Gated
+
+- Decision: Ship normalized provider payload builders and mock transport tests before enabling live image requests; unsupported or unprobed providers remain unavailable.
+- Reason: The current implementation has no verified credentials or live-provider contract evidence, and must not send image bytes optimistically.
+- Status: Active.
+
+## 2026-10-05: Preserve Native Save Path
+
+- Decision: `save_png_copy` decodes the source, re-encodes clean PNG, writes iTXt/XMP provenance, reparses metadata, and atomically renames only after verification.
+- Reason: This enforces source immutability and prevents publishing an unverifiable output file.
+- Status: Active.
