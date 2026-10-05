@@ -35,3 +35,26 @@ export type Provenance = Readonly<{
 }>;
 export type SaveRequest = Readonly<{ sourcePath: string; destinationPath: string; description: string; provenance: Provenance }>;
 export type AppError = Readonly<{ category: ErrorCategory; message?: string }>;
+export type SettingsDocument = Readonly<{
+  schemaVersion: number;
+  providerId: string | null;
+  modelId: string | null;
+  presetId: string | null;
+}>;
+
+const isErrorCategory = (value: unknown): value is ErrorCategory =>
+  typeof value === "string" && ERROR_CATEGORIES.some((category) => category === value);
+
+export const decodeAppError = (value: unknown): AppError => {
+  if (typeof value !== "object" || value === null || !("category" in value)) {
+    return { category: "malformed_response", message: "Backend returned an invalid error" };
+  }
+
+  const category = value.category;
+  if (!isErrorCategory(category)) {
+    return { category: "malformed_response", message: "Backend returned an unknown error category" };
+  }
+
+  const message = "message" in value && typeof value.message === "string" ? value.message : undefined;
+  return message === undefined ? { category } : { category, message };
+};
