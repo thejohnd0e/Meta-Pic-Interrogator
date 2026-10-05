@@ -27,3 +27,6 @@ tmp/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Local coding-agent state
+.omo/
