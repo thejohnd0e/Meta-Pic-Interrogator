@@ -537,6 +537,18 @@ impl Transport for ResponsesTransport {
 }
 
 pub fn parse_models(value: &Value) -> AppResult<Vec<VisionModel>> {
+    if let Some(data) = value.get("data").and_then(Value::as_array) {
+        return Ok(data
+            .iter()
+            .filter_map(|model| model.get("id").and_then(Value::as_str))
+            .filter(|id| !id.is_empty() && id.len() <= 200)
+            .map(|id| VisionModel {
+                id: id.to_owned(),
+                display_name: id.to_owned(),
+                vision_capable: true,
+            })
+            .collect());
+    }
     let models = value
         .get("models")
         .and_then(Value::as_array)
@@ -545,7 +557,12 @@ pub fn parse_models(value: &Value) -> AppResult<Vec<VisionModel>> {
         })?;
     Ok(models
         .iter()
-        .filter(|model| model.get("visibility").and_then(Value::as_str) == Some("list"))
+        .filter(|model| {
+            model
+                .get("visibility")
+                .and_then(Value::as_str)
+                .is_none_or(|visibility| visibility == "list")
+        })
         .filter_map(|model| {
             let slug = model.get("slug").and_then(Value::as_str)?;
             (!slug.is_empty() && slug.len() <= 200).then(|| VisionModel {
@@ -571,12 +588,23 @@ pub fn list_models(access_token: &str) -> AppResult<Vec<VisionModel>> {
         .map_err(|_| AppError::Network("ChatGPT model list unavailable".to_owned()))?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
-        return Err(map_status(status));
+        return Err(match map_status(status) {
+            AppError::MalformedResponse(_) => {
+                AppError::MalformedResponse(format!("ChatGPT model list returned status {status}"))
+            }
+            other => other,
+        });
     }
     let value: Value = response
         .json()
         .map_err(|_| AppError::MalformedResponse("ChatGPT model list was not JSON".to_owned()))?;
-    parse_models(&value)
+    let models = parse_models(&value)?;
+    if models.is_empty() {
+        return Err(AppError::UnavailableModel(
+            "ChatGPT returned no usable models for this plan".to_owned(),
+        ));
+    }
+    Ok(models)
 }
 
 #[cfg(test)]
@@ -648,6 +676,10 @@ data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"total_tokens\"
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].id, "gpt-a");
         assert!(parse_models(&json!({})).is_err());
+        let openai_style =
+            parse_models(&json!({"data":[{"id":"gpt-b"},{"id":""}]})).expect("data shape");
+        assert_eq!(openai_style.len(), 1);
+        assert_eq!(openai_style[0].id, "gpt-b");
     }
 
     #[test]

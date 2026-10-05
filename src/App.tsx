@@ -80,6 +80,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (provider !== "chatgpt" || !chatgpt.configured || chatgptModels.length > 0) return;
+    void loadChatgptModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, chatgpt.configured]);
+
+  useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void commands.credentialStatus(provider).then(setCredentialConfigured).catch(() => setCredentialConfigured(false));
   }, [provider]);
@@ -269,7 +275,9 @@ function App() {
       const first = models[0];
       if (first && !models.some((item) => item.id === model)) setModel(first.id);
     } catch (error) {
-      setSettingsNotice(decodeAppError(error).message ?? "Could not load ChatGPT models.");
+      const message = decodeAppError(error).message ?? "Could not load ChatGPT models.";
+      setSettingsNotice(message);
+      setNotice(message);
     }
   }
 
@@ -421,7 +429,9 @@ function App() {
           </div>
           <div className="detail-panel">
             <div className="panel-heading"><span className="overline">02 / Describe</span><span className={busy ? "status busy" : "status"} role="status" aria-live="polite">{notice}</span></div>
-             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label><label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="vision" /></label><label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
+             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label>{provider === "chatgpt" && chatgptModels.length > 0
+              ? <label>Model<select value={model} onChange={(event) => setModel(event.target.value)}>{chatgptModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
+              : <label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="vision" />{provider === "chatgpt" && <small className="muted">{chatgpt.configured ? "Loading models..." : "Sign in with ChatGPT in Settings to load models."}</small>}</label>}<label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
             <label className="description-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Your generated description will appear here. You can edit it before saving." /></label>
             <div className="action-row"><button className="primary-button" disabled={!nativePath || busy || !providerOptions.find((item) => item.id === provider)?.vision} onClick={() => void describe()}>{busy ? "Describing..." : "Describe image"}</button><button className="primary-button" disabled={!description.trim() || !nativePath || busy} onClick={() => void save()}>Save PNG copy</button></div>
           </div>
