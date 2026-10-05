@@ -3,6 +3,7 @@ pub mod credentials;
 pub mod domain;
 pub mod image;
 pub mod metadata;
+pub mod providers;
 pub mod settings;
 
 #[tauri::command]
