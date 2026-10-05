@@ -35,6 +35,7 @@ Quiet editorial workbench: warm bone paper, charcoal ink, and one muted ochre ac
 - `StatusPill`: checking, ready, unavailable; text and tonal wash only.
 - `PrimaryButton`: idle, disabled, busy; dark ink background with focus-visible outline.
 - `DescriptionEditor`: clean, dirty, error; preserves edited text.
+- `SettingsForm`: subscription access status, API fallback fields, secure credential actions, and persisted preset rows.
 
 ## 6. Interaction & Motion
 - Only transform/opacity transitions; no decorative motion.
@@ -44,6 +45,8 @@ Quiet editorial workbench: warm bone paper, charcoal ink, and one muted ochre ac
 ## 7. Accessibility
 - Native buttons and labels, visible focus-visible outlines, status announcements, keyboard-accessible drop fallback.
 - No color-only state communication; every state has text.
+- Subscription and API access are separate states; unavailable OAuth is explicit and never represented as a working sign-in action.
 
 ## 8. Accepted Debt
-- Native Tauri dialog and drag-drop events are wired in the next workflow task; browser fallback remains an explicit file input.
+- Native Tauri dialog and drag-drop events are wired in the workspace; browser fallback remains an explicit file input.
+- OAuth plan usage for ChatGPT Plus and SuperGrok remains provider-gated until official provider flow adapters are implemented.

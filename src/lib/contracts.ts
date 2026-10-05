@@ -39,6 +39,7 @@ export type SettingsDocument = Readonly<{
   schemaVersion: number;
   providerId: string | null;
   modelId: string | null;
+  endpoint: string | null;
   presetId: string | null;
 }>;
 

@@ -125,6 +125,8 @@ pub struct SettingsDocument {
     pub schema_version: u32,
     pub provider_id: Option<String>,
     pub model_id: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
     pub preset_id: Option<String>,
 }
 
@@ -199,5 +201,6 @@ mod tests {
         let migrated = SettingsDocument::migrate(old).expect("known settings versions migrate");
         assert_eq!(migrated.schema_version, 1);
         assert_eq!(migrated.preset_id.as_deref(), Some("concise"));
+        assert_eq!(migrated.endpoint, None);
     }
 }

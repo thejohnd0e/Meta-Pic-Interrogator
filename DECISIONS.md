@@ -41,3 +41,9 @@
 - Decision: `save_png_copy` decodes the source, re-encodes clean PNG, writes iTXt/XMP provenance, reparses metadata, and atomically renames only after verification.
 - Reason: This enforces source immutability and prevents publishing an unverifiable output file.
 - Status: Active.
+
+## 2026-10-05: Subscription-First Authentication
+
+- Decision: Treat official subscription OAuth as the primary product path; API keys remain a secondary fallback. Do not use browser cookies, web scraping, or undocumented subscription endpoints.
+- Reason: ChatGPT plan usage has an official Sign in with ChatGPT flow, while subscription UI alone is not authentication. SuperGrok must remain disabled until xAI provides a verified third-party inference OAuth surface.
+- Status: Active; ChatGPT OAuth/Responses adapter is the next implementation slice.
