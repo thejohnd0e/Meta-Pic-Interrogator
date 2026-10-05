@@ -337,6 +337,36 @@ pub enum RefreshFailure {
     Transient,
 }
 
+/// Short, token-free summary of an OAuth error body for diagnostics.
+pub fn error_summary(body: &str) -> String {
+    let value = serde_json::from_str::<serde_json::Value>(body).ok();
+    let field = |value: &serde_json::Value, name: &str| {
+        value
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    let text = value
+        .as_ref()
+        .and_then(|value| {
+            let error = value.get("error")?;
+            let code = error
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| field(error, "code"))?;
+            let detail = field(value, "error_description").or_else(|| field(error, "message"));
+            Some(match detail {
+                Some(detail) => format!("{code}: {detail}"),
+                None => code,
+            })
+        })
+        .unwrap_or_else(|| "no error code".to_owned());
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(160)
+        .collect()
+}
+
 pub fn classify_refresh_failure(status: u16, body: &str) -> RefreshFailure {
     const REAUTH: [&str; 6] = [
         "invalid_grant",
@@ -489,6 +519,17 @@ mod tests {
             classify_refresh_failure(401, "not json"),
             RefreshFailure::Transient
         );
+    }
+
+    #[test]
+    fn error_summary_reports_code_without_leaking_other_fields() {
+        assert_eq!(
+            error_summary(
+                r#"{"error":"invalid_request","error_description":"bad resource","refresh_token":"SECRET"}"#
+            ),
+            "invalid_request: bad resource"
+        );
+        assert_eq!(error_summary("<html>blocked</html>"), "no error code");
     }
 
     #[test]

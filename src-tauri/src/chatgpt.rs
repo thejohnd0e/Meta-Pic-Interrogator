@@ -152,9 +152,10 @@ pub fn access_token(store: &mut dyn CredentialStore) -> AppResult<String> {
             RefreshFailure::InvalidClient => {
                 AppError::Authentication("ChatGPT client registration is invalid".to_owned())
             }
-            RefreshFailure::Transient => {
-                AppError::Network("ChatGPT token refresh failed; try again".to_owned())
-            }
+            RefreshFailure::Transient => AppError::Network(format!(
+                "ChatGPT token refresh failed (HTTP {status}: {}); try again",
+                oauth::error_summary(&body)
+            )),
         });
     }
     let reply = TokenResponse::parse(&body)?;
@@ -214,9 +215,10 @@ pub fn sign_in(
         &oauth::exchange_form(&client_id, &callback.code, &attempt.verifier, &redirect),
     )?;
     if !(200..300).contains(&http_status) {
-        return Err(AppError::Authentication(
-            "ChatGPT sign-in was rejected".to_owned(),
-        ));
+        return Err(AppError::Authentication(format!(
+            "ChatGPT sign-in was rejected (HTTP {http_status}: {})",
+            oauth::error_summary(&body)
+        )));
     }
     let reply = TokenResponse::parse(&body)?;
     reply.require_plan_scope()?;
