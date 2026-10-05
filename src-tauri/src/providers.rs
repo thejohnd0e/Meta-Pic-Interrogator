@@ -398,7 +398,7 @@ pub fn build_openai_backend(
 }
 
 pub fn provider_capabilities(provider_id: &str) -> VisionCapabilities {
-    let image_input = matches!(provider_id, "openai" | "openai-compatible");
+    let image_input = matches!(provider_id, "openai" | "openai-compatible" | "chatgpt");
     VisionCapabilities {
         image_input,
         streaming: image_input,
@@ -688,7 +688,8 @@ mod tests {
     fn capabilities_are_disabled_for_unverified_providers() {
         assert!(provider_capabilities("openai").image_input);
         assert!(provider_capabilities("openai-compatible").image_input);
-        assert!(!provider_capabilities("chatgpt").image_input);
+        assert!(provider_capabilities("chatgpt").image_input);
+        assert!(!provider_capabilities("supergrok").image_input);
         assert!(!provider_capabilities("deepseek").image_input);
     }
 

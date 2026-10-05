@@ -1,8 +1,10 @@
+pub mod chatgpt;
 mod commands;
 pub mod credentials;
 pub mod domain;
 pub mod image;
 pub mod metadata;
+pub mod oauth;
 pub mod providers;
 pub mod settings;
 
@@ -21,6 +23,11 @@ pub fn run() {
             commands::inspect_image,
             commands::describe_image,
             commands::cancel_description,
+            commands::chatgpt_status,
+            commands::chatgpt_sign_in,
+            commands::chatgpt_cancel_sign_in,
+            commands::chatgpt_sign_out,
+            commands::chatgpt_models,
             commands::list_presets,
             commands::load_settings,
             commands::save_settings,

@@ -4,6 +4,7 @@ import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "./lib/commands";
+import { decodeAppError, type ChatGptStatus, type VisionModel } from "./lib/contracts";
 import "./App.css";
 
 type Preset = { id: string; name: string; prompt: string };
@@ -22,7 +23,7 @@ const providerOptions: ProviderOption[] = [
   { id: "anthropic", name: "Anthropic API", mode: "api", vision: false, endpoint: "https://api.anthropic.com" },
   { id: "gemini", name: "Google Gemini API", mode: "api", vision: false, endpoint: "https://generativelanguage.googleapis.com" },
   { id: "openrouter", name: "OpenRouter API", mode: "api", vision: false, endpoint: "https://openrouter.ai/api" },
-  { id: "chatgpt", name: "ChatGPT Plus", mode: "subscription", vision: false, endpoint: "" },
+  { id: "chatgpt", name: "ChatGPT Plus", mode: "subscription", vision: true, endpoint: "" },
   { id: "xai", name: "SuperGrok", mode: "subscription", vision: false, endpoint: "" },
 ];
 
@@ -58,6 +59,9 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Ready for an image");
   const [settings, setSettings] = useState(false);
+  const [chatgpt, setChatgpt] = useState<ChatGptStatus>({ configured: false, email: null });
+  const [chatgptBusy, setChatgptBusy] = useState(false);
+  const [chatgptModels, setChatgptModels] = useState<readonly VisionModel[]>([]);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -68,6 +72,11 @@ function App() {
       if (saved.presetId) setPresetId(saved.presetId);
       if (storedPresets.length > 0) setPresets(storedPresets as Preset[]);
     }).catch(() => setSettingsNotice("Could not load saved settings."));
+  }, []);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    void commands.chatgptStatus().then(setChatgpt).catch(() => setChatgpt({ configured: false, email: null }));
   }, []);
 
   useEffect(() => {
@@ -176,8 +185,10 @@ function App() {
     const next = providerOptions.find((item) => item.id === providerId);
     setProvider(providerId);
     if (next?.endpoint) setEndpoint(next.endpoint);
-    if (next?.mode === "subscription") {
-      setSettingsNotice("Subscription sign-in is not connected yet for this provider.");
+    if (providerId === "chatgpt") {
+      setSettingsNotice(chatgpt.configured ? "" : "Sign in with ChatGPT below to use your plan.");
+    } else if (next?.mode === "subscription") {
+      setSettingsNotice("Subscription sign-in is not available for this provider.");
     } else {
       setSettingsNotice("");
     }
@@ -215,6 +226,50 @@ function App() {
       setSettingsNotice(error instanceof Error ? error.message : "Could not remove credential.");
     } finally {
       setSettingsBusy(false);
+    }
+  }
+
+  async function chatgptSignIn(): Promise<void> {
+    if (!("__TAURI_INTERNALS__" in window)) {
+      setSettingsNotice("Open the desktop app to sign in.");
+      return;
+    }
+    setChatgptBusy(true);
+    setSettingsNotice("Finish signing in in your browser...");
+    try {
+      const status = await commands.chatgptSignIn();
+      setChatgpt(status);
+      setSettingsNotice("Signed in with ChatGPT.");
+      await loadChatgptModels();
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "ChatGPT sign-in failed.");
+    } finally {
+      setChatgptBusy(false);
+    }
+  }
+
+  async function chatgptSignOut(): Promise<void> {
+    setChatgptBusy(true);
+    try {
+      await commands.chatgptSignOut();
+      setChatgpt({ configured: false, email: null });
+      setChatgptModels([]);
+      setSettingsNotice("Signed out of ChatGPT.");
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "Could not sign out.");
+    } finally {
+      setChatgptBusy(false);
+    }
+  }
+
+  async function loadChatgptModels(): Promise<void> {
+    try {
+      const models = await commands.chatgptModels();
+      setChatgptModels(models);
+      const first = models[0];
+      if (first && !models.some((item) => item.id === model)) setModel(first.id);
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "Could not load ChatGPT models.");
     }
   }
 
@@ -316,9 +371,21 @@ function App() {
             <div className="subscription-grid">
               {providerOptions.filter((item) => item.mode === "subscription").map((item) => <article className="provider-card" key={item.id}>
                 <strong>{item.name}</strong>
-                <span className="warning">Official sign-in not connected</span>
-                <p>{item.id === "chatgpt" ? "ChatGPT Plus can be used through Sign in with ChatGPT when this app is registered for plan usage." : "SuperGrok subscription OAuth is not exposed as a public inference API by xAI."}</p>
-                <button className="text-button" disabled onClick={() => undefined}>Sign in unavailable</button>
+                {item.id === "chatgpt"
+                  ? <>
+                    <span className={chatgpt.configured ? "status" : "warning"}>{chatgpt.configured ? `Signed in${chatgpt.email ? ` as ${chatgpt.email}` : ""}` : "Not signed in"}</span>
+                    <p>Uses your ChatGPT plan through the official Sign in with ChatGPT flow. Sign-in opens in your browser.</p>
+                    {chatgptBusy
+                      ? <button className="text-button" onClick={() => void commands.chatgptCancelSignIn()}>Cancel sign-in</button>
+                      : chatgpt.configured
+                        ? <div className="action-row"><button className="text-button" onClick={() => void loadChatgptModels()}>Refresh models</button><button className="text-button" onClick={() => void chatgptSignOut()}>Sign out</button></div>
+                        : <button className="primary-button" onClick={() => void chatgptSignIn()}>Sign in with ChatGPT</button>}
+                  </>
+                  : <>
+                    <span className="warning">Official sign-in not available</span>
+                    <p>SuperGrok subscription OAuth is not exposed as a public inference API by xAI.</p>
+                    <button className="text-button" disabled onClick={() => undefined}>Sign in unavailable</button>
+                  </>}
               </article>)}
             </div>
           </div>
@@ -327,7 +394,9 @@ function App() {
             <div className="section-heading"><div><span className="overline">API fallback</span><h3>Provider connection</h3></div><span className={credentialConfigured ? "status" : "status busy"}>{credentialConfigured ? "Credential stored" : "Credential not set"}</span></div>
             <div className="settings-form">
               <label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-              <label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="gpt-4.1-mini" /></label>
+              {provider === "chatgpt" && chatgptModels.length > 0
+                ? <label>Model<select value={model} onChange={(event) => setModel(event.target.value)}>{chatgptModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
+                : <label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="gpt-4.1-mini" /></label>}
               <label>Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://api.openai.com" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
               <label>API key<input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={credentialConfigured ? "Stored securely; enter to replace" : "Enter provider API key"} autoComplete="off" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
             </div>

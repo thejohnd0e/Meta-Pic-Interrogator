@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ChatGptStatus,
   DescriptionDraft,
   ImageInfo,
   InputImage,
@@ -28,5 +29,10 @@ export const commands = {
   refreshModels: (provider: ProviderConfig): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("refresh_models", { provider }),
   setCredential: (providerId: string, secret: string): Promise<void> => invoke<void>("set_credential", { providerId, secret }),
   deleteCredential: (providerId: string): Promise<void> => invoke<void>("delete_credential", { providerId }),
+  chatgptStatus: (): Promise<ChatGptStatus> => invoke<ChatGptStatus>("chatgpt_status"),
+  chatgptSignIn: (): Promise<ChatGptStatus> => invoke<ChatGptStatus>("chatgpt_sign_in"),
+  chatgptCancelSignIn: (): Promise<void> => invoke<void>("chatgpt_cancel_sign_in"),
+  chatgptSignOut: (): Promise<void> => invoke<void>("chatgpt_sign_out"),
+  chatgptModels: (): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("chatgpt_models"),
   savePngCopy: (request: SaveRequest): Promise<string> => invoke<string>("save_png_copy", { request }),
 } as const;

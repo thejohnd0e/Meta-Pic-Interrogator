@@ -22,6 +22,7 @@ export type Preset = Readonly<{ id: string; name: string; prompt: string }>;
 export type ProviderConfig = Readonly<{ providerId: string; modelId: string; endpoint: string | null }>;
 export type VisionModel = Readonly<{ id: string; displayName: string; visionCapable: boolean }>;
 export type VisionCapabilities = Readonly<{ imageInput: boolean; streaming: boolean; usageReporting: boolean }>;
+export type ChatGptStatus = Readonly<{ configured: boolean; email: string | null }>;
 export type DescriptionDraft = Readonly<{ text: string; isDirty: boolean }>;
 export type Provenance = Readonly<{
   schemaVersion: number;

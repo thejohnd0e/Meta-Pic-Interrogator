@@ -70,6 +70,24 @@ fn credential_secret(provider_id: &str) -> AppResult<String> {
     }
 }
 
+fn with_credential_store<R>(
+    f: impl FnOnce(&mut dyn crate::credentials::CredentialStore) -> AppResult<R>,
+) -> AppResult<R> {
+    #[cfg(windows)]
+    {
+        f(&mut crate::credentials::WindowsCredentialStore)
+    }
+
+    #[cfg(not(windows))]
+    {
+        let store = MEMORY_CREDENTIALS.get_or_init(|| Mutex::new(Default::default()));
+        let mut store = store
+            .lock()
+            .map_err(|_| AppError::Authentication("credential store unavailable".to_owned()))?;
+        f(&mut *store)
+    }
+}
+
 fn describe_with_backend(
     input: InputImage,
     _provider: ProviderConfig,
@@ -133,8 +151,17 @@ pub fn describe_image(
     if registry.is_cancelled()? {
         return Err(AppError::Cancellation("description cancelled".to_owned()));
     }
-    let secret = credential_secret(&provider.provider_id)?;
-    let backend = crate::providers::build_openai_backend(&provider, &secret)?;
+    let backend: Box<dyn VisionBackend> = if provider.provider_id == crate::chatgpt::PROVIDER_ID {
+        let token = with_credential_store(|store| crate::chatgpt::access_token(store))?;
+        Box::new(crate::providers::ApiProvider::new_with_model(
+            provider.provider_id.clone(),
+            crate::chatgpt::ResponsesTransport::new(&token, &provider.model_id)?,
+            provider.model_id.clone(),
+        ))
+    } else {
+        let secret = credential_secret(&provider.provider_id)?;
+        crate::providers::build_openai_backend(&provider, &secret)?
+    };
     let result = describe_with_backend(input, provider, preset, backend.as_ref(), &mut |text| {
         let _ = window.emit("description-delta", DescriptionDelta { request_id, text });
     });
@@ -142,6 +169,46 @@ pub fn describe_image(
         return Err(AppError::Cancellation("description cancelled".to_owned()));
     }
     result
+}
+
+#[tauri::command]
+pub fn chatgpt_status() -> AppResult<crate::chatgpt::ChatGptStatus> {
+    with_credential_store(|store| crate::chatgpt::status(store))
+}
+
+#[tauri::command]
+pub async fn chatgpt_sign_in() -> AppResult<crate::chatgpt::ChatGptStatus> {
+    tauri::async_runtime::spawn_blocking(|| {
+        with_credential_store(|store| {
+            crate::chatgpt::sign_in(store, crate::chatgpt::open_in_browser)
+        })
+    })
+    .await
+    .map_err(|_| AppError::Network("ChatGPT sign-in stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
+pub fn chatgpt_cancel_sign_in() {
+    crate::chatgpt::cancel_sign_in();
+}
+
+#[tauri::command]
+pub async fn chatgpt_sign_out() -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(|| {
+        with_credential_store(|store| crate::chatgpt::sign_out(store))
+    })
+    .await
+    .map_err(|_| AppError::Network("ChatGPT sign-out stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
+pub async fn chatgpt_models() -> AppResult<Vec<VisionModel>> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let token = with_credential_store(|store| crate::chatgpt::access_token(store))?;
+        crate::chatgpt::list_models(&token)
+    })
+    .await
+    .map_err(|_| AppError::Network("ChatGPT model list stopped unexpectedly".to_owned()))?
 }
 
 #[tauri::command]
@@ -343,7 +410,7 @@ mod tests {
                 .image_input
         );
         assert!(
-            !provider_status("chatgpt".to_owned())
+            !provider_status("supergrok".to_owned())
                 .expect("status succeeds")
                 .image_input
         );
