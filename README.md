@@ -34,6 +34,19 @@ Download an installer from the [latest release](https://github.com/thejohnd0e/Me
 
 The installers are not code-signed, so Windows SmartScreen may show a warning the first time.
 
+## Presets
+
+Open **Presets** in the top bar to manage the prompt library. Each preset is a Markdown file in the app data folder (`%APPDATA%\com.metapic.interrogator\presets`; **Open folder** in the editor takes you there):
+
+```markdown
+---
+name: "Product photo"
+---
+Describe the product, its materials, lighting, and background.
+```
+
+The text after the header is sent to the model exactly as written. A file without a header is read as a plain prompt named after the file. Import `.md`, `.markdown`, or `.txt` files with **Import .md** or by dropping them on the editor; edits made outside the app show up after **Reload**. Presets saved by older versions are moved into files on first launch.
+
 ## Saved PNG metadata
 
 Every saved copy is a re-encoded PNG (no source metadata is carried over) with these text chunks:
@@ -84,7 +97,7 @@ The installers are written to `src-tauri/target/release/bundle/`.
 ### Layout
 
 - `src/`: React frontend (`App.tsx`, typed command wrappers in `src/lib/`).
-- `src-tauri/src/`: Rust core: `image/` (decode, normalize, encode), `metadata.rs` (PNG chunks), `providers.rs`, `gemini.rs`, `chatgpt.rs` and `oauth.rs` (ChatGPT), `supergrok.rs`, `network.rs` (proxy), `credentials.rs`, `settings.rs`, `commands.rs`.
+- `src-tauri/src/`: Rust core: `presets.rs` (preset files), `image/` (decode, normalize, encode), `metadata.rs` (PNG chunks), `providers.rs`, `gemini.rs`, `chatgpt.rs` and `oauth.rs` (ChatGPT), `supergrok.rs`, `network.rs` (proxy), `credentials.rs`, `settings.rs`, `commands.rs`.
 - `DESIGN.md`, `DECISIONS.md`: design tokens and recorded decisions.
 
 ## License

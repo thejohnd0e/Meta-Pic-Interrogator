@@ -92,6 +92,12 @@ Newest decisions are at the end. A decision marked Superseded is kept for contex
 - Decision: Ship an NSIS installer with `installMode: both` (current user or all users) and an MSI (per-machine only; Tauri's WiX has no per-user mode). Installers are not code-signed. Bump the version for every build handed to testers so upgrades apply.
 - Status: Active.
 
+## 2026-10-06: Presets Are Markdown Files
+
+- Decision: Each preset is one file, `<app data>/presets/<id>.md`, with a front matter `name:` line followed by the prompt. The id is the file name, derived from the name (letters, digits, `-`, `_`; Windows reserved names avoided) and never chosen by the UI. Presets that older versions kept in `settings.json` are moved into files once, when the folder does not exist yet; the folder's existence is the migration marker, so deleting every preset does not restore the defaults. Files without front matter are read as plain prompts named after the file. Limits: 1 MB per prompt, 200 files per import. The list is alphabetical.
+- Reason: Prompts can be long Markdown documents and numerous; files can be edited in any editor, versioned, and copied between machines, and keep `settings.json` small.
+- Status: Active. Editing is plain text; the editor autosaves after 0.7 s and on leaving.
+
 ## 2026-10-06: Keep Agent Files Out Of The Public Repository
 
 - Decision: `AGENTS.md`, `CLAUDE.md`, `docs/superpowers/`, `STATUS.md`, `TODO.md`, and agent tool directories are listed in `.gitignore` and were removed from all git history. Local copies remain for coding agents.
