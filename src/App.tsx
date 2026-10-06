@@ -543,7 +543,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.12",
+          appVersion: "0.1.13",
         },
       });
       setNotice("PNG copy saved.");
@@ -648,7 +648,7 @@ function App() {
           <div className="import-panel">
             <div className="drop-zone" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void chooseImage(); } }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files[0]); }}>
               <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff" hidden onChange={(event) => selectFile(event.target.files?.[0])} />
-              {preview ? <img src={preview} alt="Selected source" /> : <><span className="drop-mark">01</span><h2>Bring one image into focus.</h2><p>PNG, JPEG, WebP, BMP, or TIFF. The source is never modified.</p></>}
+              {preview ? <img src={preview} alt="Selected source" /> : <><h2>Bring one image into focus.</h2><p>PNG, JPEG, WebP, BMP, or TIFF. The source is never modified.</p></>}
               <button className="primary-button" aria-label={file || nativePath ? "Choose another image" : "Choose image"} onClick={() => void chooseImage()}>{file || nativePath ? "Choose another image" : "Choose image"}</button>
             </div>
             {(file || nativePath) && <div className="file-meta"><span>{file?.name ?? nativePath.split(/[\\/]/).pop()}</span>{file && <span>{Math.round(file.size / 1024)} KB</span>}</div>}
