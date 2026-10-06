@@ -117,8 +117,21 @@ fn describe_with_backend(
     DescriptionDraft::new(response.text)
 }
 
+/// Runs blocking work (file IO, decoding, network) off the UI thread so the window stays responsive.
+async fn off_ui_thread<T: Send + 'static>(
+    work: impl FnOnce() -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|_| AppError::Network("background task stopped unexpectedly".to_owned()))?
+}
+
 #[tauri::command]
-pub fn inspect_image(input: InputImage) -> AppResult<ImageInfo> {
+pub async fn inspect_image(input: InputImage) -> AppResult<ImageInfo> {
+    off_ui_thread(move || inspect_image_blocking(input)).await
+}
+
+fn inspect_image_blocking(input: InputImage) -> AppResult<ImageInfo> {
     let bytes =
         std::fs::read(&input.path).map_err(|error| AppError::LocalImage(error.to_string()))?;
     let decoded = image::decode_supported(
@@ -136,7 +149,16 @@ pub fn inspect_image(input: InputImage) -> AppResult<ImageInfo> {
 }
 
 #[tauri::command]
-pub fn describe_image(
+pub async fn describe_image(
+    input: InputImage,
+    provider: ProviderConfig,
+    preset: Preset,
+    window: tauri::Window,
+) -> AppResult<DescriptionDraft> {
+    off_ui_thread(move || describe_image_blocking(input, provider, preset, window)).await
+}
+
+fn describe_image_blocking(
     input: InputImage,
     provider: ProviderConfig,
     preset: Preset,
@@ -158,6 +180,17 @@ pub fn describe_image(
             crate::chatgpt::ResponsesTransport::with_base(
                 crate::supergrok::API_BASE,
                 &token,
+                &provider.model_id,
+            )?,
+            provider.model_id.clone(),
+        ))
+    } else if provider.provider_id == crate::gemini::PROVIDER_ID {
+        let secret = credential_secret(&provider.provider_id)?;
+        Box::new(crate::providers::ApiProvider::new_with_model(
+            provider.provider_id.clone(),
+            crate::gemini::GeminiTransport::new(
+                provider.endpoint.as_deref().unwrap_or_default(),
+                &secret,
                 &provider.model_id,
             )?,
             provider.model_id.clone(),
@@ -205,11 +238,7 @@ pub fn chatgpt_cancel_sign_in() {
 
 #[tauri::command]
 pub async fn chatgpt_sign_out() -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(|| {
-        with_credential_store(|store| crate::chatgpt::sign_out(store))
-    })
-    .await
-    .map_err(|_| AppError::Network("ChatGPT sign-out stopped unexpectedly".to_owned()))?
+    off_ui_thread(|| with_credential_store(|store| crate::chatgpt::sign_out(store))).await
 }
 
 #[tauri::command]
@@ -271,6 +300,31 @@ pub async fn supergrok_models() -> AppResult<Vec<VisionModel>> {
     })
     .await
     .map_err(|_| AppError::Network("SuperGrok model list stopped unexpectedly".to_owned()))?
+}
+
+/// Lists models for API-key providers from the provider's own model endpoint.
+#[tauri::command]
+pub async fn api_models(provider: ProviderConfig) -> AppResult<Vec<VisionModel>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let secret = credential_secret(&provider.provider_id)?;
+        let endpoint = provider.endpoint.as_deref().unwrap_or_default();
+        match provider.provider_id.as_str() {
+            "gemini" => crate::gemini::list_models(endpoint, &secret),
+            "openai" => crate::providers::fetch_openai_models(
+                if endpoint.is_empty() {
+                    "https://api.openai.com"
+                } else {
+                    endpoint
+                },
+                &secret,
+                true,
+            ),
+            "openai-compatible" => crate::providers::fetch_openai_models(endpoint, &secret, false),
+            other => Err(AppError::UnavailableModel(other.to_owned())),
+        }
+    })
+    .await
+    .map_err(|_| AppError::Network("model list stopped unexpectedly".to_owned()))?
 }
 
 const REPOSITORY_URL: &str = "https://github.com/thejohnd0e/Meta-Pic-Interrogator";
@@ -443,7 +497,11 @@ pub fn delete_credential(provider_id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn save_png_copy(request: SaveRequest) -> AppResult<String> {
+pub async fn save_png_copy(request: SaveRequest) -> AppResult<String> {
+    off_ui_thread(move || save_png_copy_blocking(request)).await
+}
+
+fn save_png_copy_blocking(request: SaveRequest) -> AppResult<String> {
     let source = std::fs::read(&request.source_path)
         .map_err(|error| AppError::LocalImage(error.to_string()))?;
     let decoded = image::decode_supported(

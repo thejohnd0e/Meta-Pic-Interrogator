@@ -10,7 +10,7 @@ import "./App.css";
 type Preset = { id: string; name: string; prompt: string };
 type DescriptionStarted = { requestId: number };
 type DescriptionDelta = { requestId: number; text: string };
-type ProviderOption = { id: string; name: string; mode: "api" | "subscription"; vision: boolean; endpoint: string };
+type ProviderOption = { id: string; name: string; mode: "api" | "subscription"; vision: boolean; endpoint: string; defaultModel: string };
 
 const initialPresets: Preset[] = [
   { id: "concise", name: "Concise", prompt: "Describe the image clearly and briefly." },
@@ -18,13 +18,13 @@ const initialPresets: Preset[] = [
 ];
 
 const providerOptions: ProviderOption[] = [
-  { id: "openai", name: "OpenAI API", mode: "api", vision: true, endpoint: "https://api.openai.com" },
-  { id: "openai-compatible", name: "OpenAI-compatible", mode: "api", vision: true, endpoint: "https://" },
-  { id: "anthropic", name: "Anthropic API", mode: "api", vision: false, endpoint: "https://api.anthropic.com" },
-  { id: "gemini", name: "Google Gemini API", mode: "api", vision: false, endpoint: "https://generativelanguage.googleapis.com" },
-  { id: "openrouter", name: "OpenRouter API", mode: "api", vision: false, endpoint: "https://openrouter.ai/api" },
-  { id: "chatgpt", name: "ChatGPT Plus", mode: "subscription", vision: true, endpoint: "" },
-  { id: "xai", name: "SuperGrok", mode: "subscription", vision: true, endpoint: "" },
+  { id: "openai", name: "OpenAI API", mode: "api", vision: true, endpoint: "https://api.openai.com", defaultModel: "gpt-4.1-mini" },
+  { id: "openai-compatible", name: "OpenAI-compatible", mode: "api", vision: true, endpoint: "https://", defaultModel: "" },
+  { id: "anthropic", name: "Anthropic API", mode: "api", vision: false, endpoint: "https://api.anthropic.com", defaultModel: "" },
+  { id: "gemini", name: "Google Gemini API", mode: "api", vision: true, endpoint: "https://generativelanguage.googleapis.com", defaultModel: "" },
+  { id: "openrouter", name: "OpenRouter API", mode: "api", vision: false, endpoint: "https://openrouter.ai/api", defaultModel: "" },
+  { id: "chatgpt", name: "ChatGPT Plus", mode: "subscription", vision: true, endpoint: "", defaultModel: "" },
+  { id: "xai", name: "SuperGrok", mode: "subscription", vision: true, endpoint: "", defaultModel: "" },
 ];
 
 const supportedExtensions = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
@@ -65,7 +65,7 @@ function App() {
   const [preview, setPreview] = useState("");
   const [description, setDescription] = useState("");
   const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("vision");
+  const [model, setModel] = useState("gpt-4.1-mini");
   const [endpoint, setEndpoint] = useState("https://api.openai.com");
   const [credential, setCredential] = useState("");
   const [credentialConfigured, setCredentialConfigured] = useState(false);
@@ -87,22 +87,27 @@ function App() {
   const [grok, setGrok] = useState<SuperGrokStatus>({ configured: false, email: null });
   const [grokBusy, setGrokBusy] = useState(false);
   const [grokCode, setGrokCode] = useState<DeviceCode | null>(null);
-  const [subscriptionModels, setSubscriptionModels] = useState<Record<string, readonly VisionModel[]>>({});
+  const [modelLists, setModelLists] = useState<Record<string, readonly VisionModel[]>>({});
   const [modelByProvider, setModelByProvider] = useState<Record<string, string>>({});
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>(readThemeChoice);
-  const providerModels = subscriptionModels[provider] ?? [];
+  const providerModels = modelLists[provider] ?? [];
+  const listableApi = provider === "gemini" || provider === "openai" || provider === "openai-compatible";
   const subscriptionProvider = providerOptions.find((item) => item.id === provider && item.mode === "subscription");
   const subscriptionConfigured = provider === "chatgpt" ? chatgpt.configured : provider === "xai" ? grok.configured : false;
+  const canListModels = subscriptionProvider ? subscriptionConfigured : listableApi && credentialConfigured;
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void Promise.all([commands.loadSettings(), commands.listPresets()]).then(([saved, storedPresets]) => {
       const remembered = saved.modelByProvider ?? {};
       setModelByProvider(remembered);
-      if (saved.providerId) setProvider(saved.providerId);
-      const savedModel = (saved.providerId ? remembered[saved.providerId] : undefined) ?? saved.modelId;
-      if (savedModel) setModel(savedModel);
+      const usable = providerOptions.some((item) => item.id === saved.providerId && item.vision);
+      const restored = usable && saved.providerId ? saved.providerId : "openai";
+      setProvider(restored);
+      const savedModel = remembered[restored] ?? (usable ? saved.modelId : null) ?? providerOptions.find((item) => item.id === restored)?.defaultModel;
+      setModel(savedModel ?? "");
       if (saved.endpoint) setEndpoint(saved.endpoint);
       if (saved.presetId) setPresetId(saved.presetId);
       if (saved.proxy) {
@@ -146,7 +151,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!subscriptionConfigured || (subscriptionModels[provider]?.length ?? 0) > 0) return;
+    if (!subscriptionConfigured || (modelLists[provider]?.length ?? 0) > 0) return;
     void loadModels(provider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, subscriptionConfigured]);
@@ -289,9 +294,7 @@ function App() {
     const next = providerOptions.find((item) => item.id === providerId);
     setProvider(providerId);
     if (next?.endpoint) setEndpoint(next.endpoint);
-    const remembered = modelByProvider[providerId];
-    if (remembered) setModel(remembered);
-    else if (next?.mode === "subscription") setModel("");
+    setModel(modelByProvider[providerId] ?? next?.defaultModel ?? "");
     if (providerId === "chatgpt") {
       setSettingsNotice(chatgpt.configured ? "" : "Sign in with ChatGPT below to use your plan.");
     } else if (providerId === "xai") {
@@ -308,6 +311,7 @@ function App() {
     }
     setSettingsBusy(true);
     try {
+      const hadKey = Boolean(credential.trim());
       await commands.saveSettings(settingsPayload());
       if (credential.trim()) {
         await commands.setCredential(provider, credential.trim());
@@ -315,6 +319,7 @@ function App() {
         setCredentialConfigured(true);
       }
       setSettingsNotice("Provider settings saved securely.");
+      if (listableApi && (credentialConfigured || hadKey)) await loadModels(provider);
     } catch (error) {
       setSettingsNotice(error instanceof Error ? error.message : "Could not save provider settings.");
     } finally {
@@ -328,6 +333,7 @@ function App() {
     try {
       await commands.deleteCredential(provider);
       setCredentialConfigured(false);
+      setModelLists((previous) => ({ ...previous, [provider]: [] }));
       setSettingsNotice("Stored credential removed.");
     } catch (error) {
       setSettingsNotice(error instanceof Error ? error.message : "Could not remove credential.");
@@ -400,7 +406,7 @@ function App() {
     try {
       await commands.chatgptSignOut();
       setChatgpt({ configured: false, email: null });
-      setSubscriptionModels((previous) => ({ ...previous, chatgpt: [] }));
+      setModelLists((previous) => ({ ...previous, chatgpt: [] }));
       setSettingsNotice("Signed out of ChatGPT.");
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "Could not sign out.");
@@ -437,7 +443,7 @@ function App() {
     try {
       await commands.supergrokSignOut();
       setGrok({ configured: false, email: null });
-      setSubscriptionModels((previous) => ({ ...previous, xai: [] }));
+      setModelLists((previous) => ({ ...previous, xai: [] }));
       setSettingsNotice("Signed out of SuperGrok.");
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "Could not sign out.");
@@ -447,9 +453,14 @@ function App() {
   }
 
   async function loadModels(providerId: string): Promise<void> {
+    setModelsLoading(true);
     try {
-      const models = providerId === "xai" ? await commands.supergrokModels() : await commands.chatgptModels();
-      setSubscriptionModels((previous) => ({ ...previous, [providerId]: models }));
+      const models = providerId === "xai"
+        ? await commands.supergrokModels()
+        : providerId === "chatgpt"
+          ? await commands.chatgptModels()
+          : await commands.apiModels({ providerId, modelId: model, endpoint: endpoint || null });
+      setModelLists((previous) => ({ ...previous, [providerId]: models }));
       const wanted = modelByProvider[providerId];
       const pick = models.find((item) => item.id === wanted) ?? models.find((item) => item.id === model) ?? models[0];
       if (pick && providerId === provider && pick.id !== model) chooseModel(pick.id);
@@ -457,6 +468,8 @@ function App() {
       const message = decodeAppError(error).message ?? "Could not load models.";
       setSettingsNotice(message);
       setNotice(message);
+    } finally {
+      setModelsLoading(false);
     }
   }
 
@@ -495,7 +508,7 @@ function App() {
       setDescription(result.text);
       setNotice("Description ready to review.");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Description failed; your draft was preserved.");
+      setNotice(decodeAppError(error).message ?? "Description failed; your draft was preserved.");
     } finally {
       setBusy(false);
     }
@@ -527,19 +540,19 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.6",
+          appVersion: "0.1.10",
         },
       });
       setNotice("PNG copy saved.");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Save failed; your draft was preserved.");
+      setNotice(decodeAppError(error).message ?? "Save failed; your draft was preserved.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <main className="app-shell">
+    <main className={settings ? "app-shell" : "app-shell fit"}>
       <header className="topbar">
         <div><span className="overline">Meta Pic / Interrogator</span><h1>Image, then evidence.</h1></div>
         <div className="topbar-actions">
@@ -585,14 +598,14 @@ function App() {
           <div className="settings-section">
             <div className="section-heading"><div><span className="overline">API fallback</span><h3>Provider connection</h3></div><span className={credentialConfigured ? "status" : "status busy"}>{credentialConfigured ? "Credential stored" : "Credential not set"}</span></div>
             <div className="settings-form">
-              <label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+              <label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label>
               {providerModels.length > 0
                 ? <label>Model<select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-                : <label>Model<input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="gpt-4.1-mini" /></label>}
+                : <label>Model<input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder={providerOptions.find((item) => item.id === provider)?.defaultModel || "Model id"} /></label>}
               <label>Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://api.openai.com" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
               <label>API key<input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={credentialConfigured ? "Stored securely; enter to replace" : "Enter provider API key"} autoComplete="off" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
             </div>
-            <div className="action-row"><button className="primary-button" disabled={settingsBusy} onClick={() => void saveProviderSettings()}>{settingsBusy ? "Saving..." : "Save provider settings"}</button>{credentialConfigured && <button className="text-button" disabled={settingsBusy} onClick={() => void removeProviderCredential()}>Remove stored key</button>}</div>
+            <div className="action-row"><button className="primary-button" disabled={settingsBusy} onClick={() => void saveProviderSettings()}>{settingsBusy ? "Saving..." : "Save provider settings"}</button>{canListModels && <button className="text-button" disabled={settingsBusy || modelsLoading} onClick={() => void loadModels(provider)}>{modelsLoading ? "Refreshing..." : "Refresh models"}</button>}{credentialConfigured && <button className="text-button" disabled={settingsBusy} onClick={() => void removeProviderCredential()}>Remove stored key</button>}</div>
             {settingsNotice && <p className="form-notice" role="status" aria-live="polite">{settingsNotice}</p>}
           </div>
 
@@ -633,10 +646,13 @@ function App() {
             {(file || nativePath) && <div className="file-meta"><span>{file?.name ?? nativePath.split(/[\\/]/).pop()}</span>{file && <span>{Math.round(file.size / 1024)} KB</span>}</div>}
           </div>
           <div className="detail-panel">
-            <div className="panel-heading"><span className="overline">02 / Describe</span><span className={busy ? "status busy" : "status"} role="status" aria-live="polite">{notice}</span></div>
-             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label>{providerModels.length > 0
-              ? <label>Model<select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-              : <label>Model<input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="vision" />{subscriptionProvider && <small className="muted">{subscriptionConfigured ? "Loading models..." : "Sign in with " + subscriptionProvider.name + " in Settings to load models."}</small>}</label>}<label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
+            <div className="panel-heading"><span className={busy ? "status busy" : "status"} role="status" aria-live="polite">{notice}</span></div>
+             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label><label>Model<span className="select-row">
+                {providerModels.length > 0
+                  ? <select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select>
+                  : <input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder={providerOptions.find((item) => item.id === provider)?.defaultModel || "Model id"} />}
+                {canListModels && <button type="button" className={modelsLoading ? "icon-button spinning" : "icon-button"} title="Refresh model list" aria-label="Refresh model list" disabled={modelsLoading} onClick={() => void loadModels(provider)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg></button>}
+              </span>{providerModels.length === 0 && subscriptionProvider && <small className="muted">{subscriptionConfigured ? "Loading models..." : "Sign in with " + subscriptionProvider.name + " in Settings to load models."}</small>}</label><label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
             <label className="description-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Your generated description will appear here. You can edit it before saving." /></label>
             <div className="action-row"><button className="primary-button" disabled={!nativePath || busy || !providerOptions.find((item) => item.id === provider)?.vision} onClick={() => void describe()}>{busy ? "Describing..." : "Describe image"}</button><button className="primary-button" disabled={!description.trim() || !nativePath || busy} onClick={() => void save()}>Save PNG copy</button></div>
           </div>

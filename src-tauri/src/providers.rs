@@ -399,13 +399,115 @@ pub fn build_openai_backend(
 pub fn provider_capabilities(provider_id: &str) -> VisionCapabilities {
     let image_input = matches!(
         provider_id,
-        "openai" | "openai-compatible" | "chatgpt" | "xai"
+        "openai" | "openai-compatible" | "chatgpt" | "xai" | "gemini"
     );
     VisionCapabilities {
         image_input,
         streaming: image_input,
         usage_reporting: image_input,
     }
+}
+
+/// `{endpoint}/v1/models`, tolerating endpoints that already end in `/v1` or `/chat/completions`.
+pub fn models_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.trim().trim_end_matches('/');
+    let endpoint = endpoint
+        .strip_suffix("/chat/completions")
+        .unwrap_or(endpoint);
+    if endpoint.ends_with("/v1") {
+        format!("{endpoint}/models")
+    } else {
+        format!("{endpoint}/v1/models")
+    }
+}
+
+/// With `chat_only`, keeps GPT and o-series chat models and drops audio, image,
+/// embedding, moderation, and similar families.
+pub fn parse_openai_models(
+    value: &serde_json::Value,
+    chat_only: bool,
+) -> AppResult<Vec<VisionModel>> {
+    const EXCLUDED: [&str; 10] = [
+        "audio",
+        "realtime",
+        "transcribe",
+        "tts",
+        "image",
+        "embedding",
+        "moderation",
+        "search",
+        "instruct",
+        "whisper",
+    ];
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            AppError::MalformedResponse("provider model list has an unexpected shape".to_owned())
+        })?;
+    let mut models: Vec<VisionModel> = data
+        .iter()
+        .filter_map(|model| model.get("id").and_then(serde_json::Value::as_str))
+        .filter(|id| !id.is_empty() && id.len() <= 200)
+        .filter(|id| {
+            if !chat_only {
+                return true;
+            }
+            let lower = id.to_ascii_lowercase();
+            let family = lower.starts_with("gpt-")
+                || lower.starts_with("chatgpt-")
+                || (lower.starts_with('o')
+                    && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit()));
+            family && !EXCLUDED.iter().any(|word| lower.contains(word))
+        })
+        .map(|id| VisionModel {
+            id: id.to_owned(),
+            display_name: id.to_owned(),
+            vision_capable: true,
+        })
+        .collect();
+    models.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(models)
+}
+
+pub fn fetch_openai_models(
+    endpoint: &str,
+    api_key: &str,
+    chat_only: bool,
+) -> AppResult<Vec<VisionModel>> {
+    if api_key.trim().is_empty() {
+        return Err(AppError::Authentication(
+            "provider credential is not configured".to_owned(),
+        ));
+    }
+    validate_endpoint(endpoint)?;
+    let response = crate::network::client_builder()?
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|_| AppError::Network("provider client unavailable".to_owned()))?
+        .get(models_endpoint(endpoint))
+        .bearer_auth(api_key.trim())
+        .send()
+        .map_err(|_| AppError::Network("provider model list unavailable".to_owned()))?;
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(match status {
+            401 | 403 => AppError::Authentication("provider rejected credentials".to_owned()),
+            429 => AppError::RateLimit("provider rate limit".to_owned()),
+            500..=599 => AppError::Network("provider server error".to_owned()),
+            _ => AppError::MalformedResponse(format!("provider returned status {status}")),
+        });
+    }
+    let value: serde_json::Value = response
+        .json()
+        .map_err(|_| AppError::MalformedResponse("provider model list was not JSON".to_owned()))?;
+    let models = parse_openai_models(&value, chat_only)?;
+    if models.is_empty() {
+        return Err(AppError::UnavailableModel(
+            "provider returned no usable models".to_owned(),
+        ));
+    }
+    Ok(models)
 }
 
 pub fn configured_models(config: &ProviderConfig) -> AppResult<Vec<VisionModel>> {
@@ -692,6 +794,8 @@ mod tests {
         assert!(provider_capabilities("openai-compatible").image_input);
         assert!(provider_capabilities("chatgpt").image_input);
         assert!(provider_capabilities("xai").image_input);
+        assert!(provider_capabilities("gemini").image_input);
+        assert!(!provider_capabilities("anthropic").image_input);
         assert!(!provider_capabilities("deepseek").image_input);
     }
 
@@ -772,5 +876,31 @@ mod tests {
             .expect("stream succeeds");
         assert_eq!(fragments, vec!["streamed text"]);
         assert_eq!(response.text, "streamed text");
+    }
+    #[test]
+    fn openai_model_list_is_filtered_and_endpoints_are_normalized() {
+        let value = serde_json::json!({"data":[
+            {"id":"gpt-4.1-mini"},{"id":"o3"},{"id":"whisper-1"},
+            {"id":"gpt-4o-audio-preview"},{"id":"text-embedding-3-small"},{"id":"gpt-image-1"}
+        ]});
+        let chat = parse_openai_models(&value, true).expect("chat");
+        assert_eq!(
+            chat.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            ["gpt-4.1-mini", "o3"]
+        );
+        assert_eq!(parse_openai_models(&value, false).expect("all").len(), 6);
+        assert!(parse_openai_models(&serde_json::json!({}), true).is_err());
+        assert_eq!(
+            models_endpoint("https://api.openai.com"),
+            "https://api.openai.com/v1/models"
+        );
+        assert_eq!(
+            models_endpoint("https://x.test/v1/"),
+            "https://x.test/v1/models"
+        );
+        assert_eq!(
+            models_endpoint("https://x.test/v1/chat/completions"),
+            "https://x.test/v1/models"
+        );
     }
 }

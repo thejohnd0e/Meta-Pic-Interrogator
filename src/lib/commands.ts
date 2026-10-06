@@ -31,6 +31,7 @@ export const commands = {
   deletePreset: (presetId: string): Promise<void> => invoke<void>("delete_preset", { presetId }),
   providerStatus: (providerId: string): Promise<VisionCapabilities> => invoke<VisionCapabilities>("provider_status", { providerId }),
   credentialStatus: (providerId: string): Promise<boolean> => invoke<boolean>("credential_status", { providerId }),
+  apiModels: (provider: ProviderConfig): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("api_models", { provider }),
   refreshModels: (provider: ProviderConfig): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("refresh_models", { provider }),
   setCredential: (providerId: string, secret: string): Promise<void> => invoke<void>("set_credential", { providerId, secret }),
   deleteCredential: (providerId: string): Promise<void> => invoke<void>("delete_credential", { providerId }),

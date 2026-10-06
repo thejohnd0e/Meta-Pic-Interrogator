@@ -74,3 +74,43 @@
   padding: 0;
   text-decoration: underline;
 }
+
+/* Main workspace fits the window height (no page scroll); Settings scrolls normally. */
+.app-shell.fit { height: 100dvh; min-height: 0; padding-top: clamp(14px, 3.5vh, 40px); padding-bottom: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.fit .topbar { flex: none; padding-bottom: clamp(10px, 2vh, 24px); }
+.fit h1 { font-size: clamp(2rem, 7.5vh, 4.2rem); margin-top: 4px; }
+.fit .workspace { flex: 1; min-height: 0; margin-top: clamp(12px, 3vh, 32px); grid-template-rows: minmax(0, 1fr); }
+.fit .import-panel { display: flex; flex-direction: column; min-height: 0; }
+.fit .drop-zone { flex: 1; min-height: 0; padding: clamp(16px, 3vh, 40px) 24px; overflow: hidden; }
+.fit .drop-zone img { flex: 1 1 0; min-height: 0; max-height: none; width: 100%; margin-bottom: 16px; object-fit: contain; }
+.fit .file-meta { flex: none; }
+.fit .detail-panel { display: flex; flex-direction: column; min-height: 0; padding: clamp(14px, 2.6vh, 28px) 24px; }
+.fit .controls { margin: clamp(10px, 2.4vh, 28px) 0; gap: 10px; flex: none; }
+.fit .description-field { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fit .description-field textarea { flex: 1; min-height: 72px; resize: none; }
+.fit .action-row { flex: none; margin-top: 14px; }
+.fit .app-footer { flex: none; margin-top: clamp(8px, 1.6vh, 16px); padding-top: 10px; }
+
+/* Very low or narrow windows fall back to normal page scrolling. */
+@media (max-width: 760px), (max-height: 680px) {
+  .app-shell.fit { height: auto; min-height: 100dvh; display: block; overflow: visible; padding-bottom: 28px; }
+  .fit h1 { font-size: clamp(2rem, 6vw, 3.4rem); }
+  .fit .workspace { grid-template-rows: none; margin-top: 28px; }
+  .fit .drop-zone { min-height: 300px; }
+  .fit .drop-zone img { flex: none; max-height: 240px; }
+  .fit .detail-panel { display: block; }
+  .fit .controls { margin: 24px 0; }
+  .fit .description-field { display: grid; }
+  .fit .description-field textarea { min-height: 180px; resize: vertical; }
+  .fit .app-footer { margin-top: 28px; }
+}
+
+.panel-heading { justify-content: flex-end; }
+
+.select-row { display: flex; gap: 8px; align-items: stretch; }
+.select-row select, .select-row input { flex: 1; width: auto; min-width: 0; }
+.icon-button { flex: none; aspect-ratio: 1; min-width: 40px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--accent); }
+.icon-button svg { width: 18px; height: 18px; }
+.icon-button.spinning svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .icon-button.spinning svg { animation: none; } }

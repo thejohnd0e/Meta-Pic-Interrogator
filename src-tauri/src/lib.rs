@@ -2,6 +2,7 @@ pub mod chatgpt;
 mod commands;
 pub mod credentials;
 pub mod domain;
+pub mod gemini;
 pub mod image;
 pub mod metadata;
 pub mod network;
@@ -31,6 +32,7 @@ pub fn run() {
             commands::describe_image,
             commands::cancel_description,
             commands::open_repository,
+            commands::api_models,
             commands::chatgpt_status,
             commands::chatgpt_sign_in,
             commands::chatgpt_cancel_sign_in,
