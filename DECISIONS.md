@@ -52,7 +52,7 @@
 
 - Decision: Use the documented open-source "plan usage" flow: first sign-in with `client_id=dynamic_agent_client`, persist the issued client id, a stable `ext_agent_host_id`, and tokens per account; PKCE S256, loopback `http://127.0.0.1:<port>/auth/callback`, scope `openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`, resource `https://api.openai.com/v1`. Do not use the Codex CLI client id.
 - Reason: OpenAI documents this flow for open-source and locally hosted apps; borrowing another product's client id is unofficial. The docs mark it as a preview, so behavior may change.
-- Unverified against the live service: the callback parameter carrying the issued client id (`client_id`, as in LingvoLoc), revoke form fields, and the Responses `instructions` field. Access tokens are kept in memory only; the persisted session is client id, host id, e-mail, and refresh token.
+- Confirmed on the live service: dynamic registration, the callback `client_id` parameter, the Responses `instructions` field, model list, and image descriptions. Still unconfirmed: revoke form fields. Access tokens are kept in memory only; the persisted session is client id, host id, e-mail, and refresh token.
 - Status: Active.
 
 ## 2026-10-06: Mirror Description Into Parameters
