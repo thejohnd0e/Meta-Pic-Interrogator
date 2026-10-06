@@ -11,6 +11,8 @@
 
 A small Windows desktop app that describes an image with a vision model and saves a **clean PNG copy** with the description embedded as metadata. Use your **ChatGPT Plus/Pro** or **SuperGrok** subscription, or an OpenAI-compatible API key. The original file is never modified.
 
+![Meta Pic Interrogator main window](docs/screenshot.png)
+
 ## Features
 
 - **Subscription sign-in**: ChatGPT plan usage (Sign in with ChatGPT) and SuperGrok, with no API key needed.
