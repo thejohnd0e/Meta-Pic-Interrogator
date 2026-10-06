@@ -18,7 +18,7 @@ A small Windows desktop app that describes an image with a vision model and save
 - **Subscription sign-in**: ChatGPT plan usage (Sign in with ChatGPT) and SuperGrok, with no API key needed.
 - **API key providers**: OpenAI, OpenAI-compatible endpoints, and Google Gemini (key from AI Studio), with streaming output and a refreshable model list.
 - **Editable result**: review and edit the description, pick a preset from a searchable list (recent ones first) or write your own. Presets are Markdown files, so long prompts are fine: use the built-in editor (autosave, search, duplicate), import or drop `.md`/`.txt` files, export, or edit the files in the presets folder directly.
-- **Metadata that other tools can read**: the saved PNG carries the text in several standard places (see below), so it shows up in viewers such as [Eagle](https://eagle.cool) with a `Parameters` reader plugin.
+- **Metadata that other tools can read**: the saved PNG carries the text in several standard places (see below), so it shows up in viewers such as [Eagle](https://eagle.cool) with a `Parameters` reader plugin. See [Reading the metadata with our other apps](#reading-the-metadata-with-our-other-apps).
 - **Optional proxy**: HTTP or SOCKS5 for every request the app makes, useful where a provider blocks your region.
 - **Light and dark theme**: follows the system or is set in Settings.
 - **Remembers your choices**: last provider, model per provider, endpoint, and preset.
@@ -61,6 +61,11 @@ Every saved copy is a re-encoded PNG (no source metadata is carried over) with t
 | `iTXt` `XML:com.adobe.xmp` | XMP packet with the description and provenance |
 
 The file is written to a temporary name, parsed back to verify the metadata, and only then renamed into place.
+
+### Reading the metadata with our other apps
+
+- [Prompt Lens](https://github.com/thejohnd0e/prompt-lens): reads the embedded prompt and metadata from images.
+- [Eagle PNG Metadata](https://github.com/thejohnd0e/eagle-png-metadata): a plugin for [Eagle](https://eagle.cool) that shows PNG metadata (including `Parameters`) inside the library.
 
 ## Notes on providers
 
