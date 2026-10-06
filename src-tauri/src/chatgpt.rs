@@ -23,7 +23,7 @@ pub const PROVIDER_ID: &str = "chatgpt";
 pub const REDIRECT_PORT: u16 = 47836;
 const SESSION_KEY: &str = "chatgpt-session";
 const API_BASE: &str = "https://api.openai.com/v1";
-const APP_NAME: &str = "MetaPic Interrogator";
+const APP_NAME: &str = "Meta Pic Interrogator";
 const INSTRUCTIONS: &str = "You describe images accurately and concisely.";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 const REFRESH_MARGIN: Duration = Duration::from_secs(60);
@@ -302,11 +302,14 @@ fn handle_connection(mut stream: TcpStream) -> Option<String> {
     let count = stream.read(&mut buffer).ok()?;
     let target = oauth::callback_target(&String::from_utf8_lossy(&buffer[..count]), REDIRECT_PORT);
     let (status, body) = match target {
-        Some(_) => ("200 OK", "You can close this tab and return to MetaPic."),
+        Some(_) => (
+            "200 OK",
+            "You can close this tab and return to Meta Pic Interrogator.",
+        ),
         None => ("404 Not Found", "Not found."),
     };
     let page = format!(
-        "<!doctype html><meta charset=\"utf-8\"><title>MetaPic</title><body style=\"font-family:sans-serif;padding:2rem\"><p>{body}</p>"
+        "<!doctype html><meta charset=\"utf-8\"><title>Meta Pic Interrogator</title><body style=\"font-family:sans-serif;padding:2rem\"><p>{body}</p>"
     );
     let _ = stream.write_all(
         format!(

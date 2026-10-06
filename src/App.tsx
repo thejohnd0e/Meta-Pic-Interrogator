@@ -490,7 +490,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.4",
+          appVersion: "0.1.5",
         },
       });
       setNotice("PNG copy saved.");
@@ -504,7 +504,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div><span className="overline">MetaPic / Interrogator</span><h1>Image, then evidence.</h1></div>
+        <div><span className="overline">Meta Pic / Interrogator</span><h1>Image, then evidence.</h1></div>
         <div className="topbar-actions">
           {busy && <button className="text-button" onClick={() => void commands.cancelDescription()}>Cancel</button>}
           <button className="text-button" onClick={() => setSettings(!settings)}>{settings ? "Back to workspace" : "Settings"}</button>

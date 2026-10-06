@@ -1,7 +1,7 @@
-# MetaPic Interrogator Design System
+# Meta Pic Interrogator Design System
 
 ## 0. Research Log
-- Embedded refs: shortlisted minimalist, taste, and soft directions; picked minimalist + warm editorial treatment because MetaPic is an operational desktop tool.
+- Embedded refs: shortlisted minimalist, taste, and soft directions; picked minimalist + warm editorial treatment because Meta Pic Interrogator is an operational desktop tool.
 - Lazyweb and Imagen lanes: skipped; no network/reference image is required for this native utility surface.
 
 ## 1. Atmosphere & Identity

@@ -1,4 +1,4 @@
-# MetaPic Interrogator
+# Meta Pic Interrogator
 
 [![Release](https://img.shields.io/github/v/release/thejohnd0e/Meta-Pic-Interrogator?label=release)](https://github.com/thejohnd0e/Meta-Pic-Interrogator/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/thejohnd0e/Meta-Pic-Interrogator/total)](https://github.com/thejohnd0e/Meta-Pic-Interrogator/releases)
@@ -6,6 +6,7 @@
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![License](https://img.shields.io/github/license/thejohnd0e/Meta-Pic-Interrogator)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 
 A small Windows desktop app that describes an image with a vision model and saves a **clean PNG copy** with the description embedded as metadata. Use your **ChatGPT Plus/Pro** or **SuperGrok** subscription, or an OpenAI-compatible API key. The original file is never modified.
@@ -27,8 +28,8 @@ Download an installer from the [latest release](https://github.com/thejohnd0e/Me
 
 | File | Scope |
 | --- | --- |
-| `MetaPic Interrogator_x.y.z_x64-setup.exe` | Asks whether to install for the current user or for all users |
-| `MetaPic Interrogator_x.y.z_x64_en-US.msi` | All users (needs administrator rights) |
+| `Meta Pic Interrogator_x.y.z_x64-setup.exe` | Asks whether to install for the current user or for all users |
+| `Meta Pic Interrogator_x.y.z_x64_en-US.msi` | All users (needs administrator rights) |
 
 The installers are not code-signed, so Windows SmartScreen may show a warning the first time.
 
@@ -83,4 +84,8 @@ The installers are written to `src-tauri/target/release/bundle/`.
 
 - `src/`: React frontend (`App.tsx`, typed command wrappers in `src/lib/`).
 - `src-tauri/src/`: Rust core: `image/` (decode, normalize, encode), `metadata.rs` (PNG chunks), `providers.rs`, `chatgpt.rs` and `oauth.rs` (ChatGPT), `supergrok.rs`, `network.rs` (proxy), `credentials.rs`, `settings.rs`, `commands.rs`.
-- `DESIGN.md`, `STATUS.md`, `DECISIONS.md`, `TODO.md`: design tokens, project status, decisions, and open work.
+- `DESIGN.md`, `DECISIONS.md`: design tokens and recorded decisions.
+
+## License
+
+[MIT](LICENSE)
