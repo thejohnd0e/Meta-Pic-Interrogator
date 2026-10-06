@@ -405,7 +405,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.2",
+          appVersion: "0.1.3",
         },
       });
       setNotice("PNG copy saved.");

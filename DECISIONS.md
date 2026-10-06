@@ -54,3 +54,9 @@
 - Reason: OpenAI documents this flow for open-source and locally hosted apps; borrowing another product's client id is unofficial. The docs mark it as a preview, so behavior may change.
 - Unverified against the live service: the callback parameter carrying the issued client id (`client_id`, as in LingvoLoc), revoke form fields, and the Responses `instructions` field. Access tokens are kept in memory only; the persisted session is client id, host id, e-mail, and refresh token.
 - Status: Active.
+
+## 2026-10-06: Mirror Description Into Parameters
+
+- Decision: Saved PNGs carry the description both as iTXt `Description` and as iTXt `Parameters`; the verified save requires the two to match.
+- Reason: The Eagle "PNG metadata" plugin only reads `Parameters` (Stable Diffusion style). Tools that parse `Parameters` as an SD prompt will show the description as the prompt text.
+- Status: Active.

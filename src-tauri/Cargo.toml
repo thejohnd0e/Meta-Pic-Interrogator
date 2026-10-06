@@ -1,6 +1,6 @@
 [package]
 name = "metapic-interrogator"
-version = "0.1.2"
+version = "0.1.3"
 description = "MetaPic Interrogator desktop application"
 authors = ["you"]
 edition = "2021"

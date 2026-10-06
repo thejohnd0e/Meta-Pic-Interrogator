@@ -90,6 +90,9 @@ pub fn write_metadata_png(
         }
         if kind == b"IDAT" && !inserted {
             output.extend_from_slice(&itxt("Description", description)?);
+            // Same text under the Stable Diffusion key so viewers that only
+            // read `Parameters` (for example the Eagle PNG metadata plugin) show it.
+            output.extend_from_slice(&itxt("Parameters", description)?);
             output.extend_from_slice(&itxt("MetaPic:Interrogator", &json)?);
             output.extend_from_slice(&itxt("XML:com.adobe.xmp", &xmp)?);
             inserted = true;
@@ -114,6 +117,7 @@ pub fn parse_metadata(bytes: &[u8]) -> AppResult<ParsedMetadata> {
     }
     let mut offset = 8;
     let mut description = None;
+    let mut parameters = None;
     let mut provenance = None;
     let mut xmp_value = None;
     while offset + 12 <= bytes.len() {
@@ -143,6 +147,7 @@ pub fn parse_metadata(bytes: &[u8]) -> AppResult<ParsedMetadata> {
                     if let Ok(text) = str::from_utf8(&data[text_start + 1..]) {
                         match keyword {
                             b"Description" => description = Some(text.to_owned()),
+                            b"Parameters" => parameters = Some(text.to_owned()),
                             b"MetaPic:Interrogator" => provenance = serde_json::from_str(text).ok(),
                             b"XML:com.adobe.xmp" => xmp_value = Some(text.to_owned()),
                             _ => {}
@@ -153,12 +158,16 @@ pub fn parse_metadata(bytes: &[u8]) -> AppResult<ParsedMetadata> {
         }
         offset += length + 12;
     }
-    match (description, provenance, xmp_value) {
-        (Some(description), Some(provenance), Some(xmp)) => Ok(ParsedMetadata {
-            description,
-            provenance,
-            xmp,
-        }),
+    match (description, parameters, provenance, xmp_value) {
+        (Some(description), Some(parameters), Some(provenance), Some(xmp))
+            if parameters == description =>
+        {
+            Ok(ParsedMetadata {
+                description,
+                provenance,
+                xmp,
+            })
+        }
         _ => Err(AppError::LocalMetadata(
             "required metadata missing".to_owned(),
         )),
@@ -206,6 +215,23 @@ mod tests {
         assert_eq!(parsed.description, "Привет <world> 🌍");
         assert_eq!(parsed.provenance.provider, "test");
         assert!(parsed.xmp.contains("&lt;world&gt;"));
+    }
+
+    #[test]
+    fn parameters_chunk_mirrors_description_for_eagle() {
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([1, 2, 3, 255])))
+            .write_to(&mut cursor, image::ImageFormat::Png)
+            .expect("fixture");
+        let output =
+            write_metadata_png(&cursor.into_inner(), "Описание", &provenance()).expect("metadata");
+        let needle = b"Parameters     ";
+        let found = output
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .expect("Parameters iTXt present");
+        let text = "Описание".as_bytes();
+        assert_eq!(&output[found + needle.len()..][..text.len()], text);
     }
 
     #[test]
