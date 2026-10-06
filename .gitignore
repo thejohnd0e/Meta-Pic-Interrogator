@@ -31,3 +31,15 @@ Thumbs.db
 .omo/
 .worktrees/
 .superpowers/
+
+# Coding-agent instructions, plans, and tool state (kept locally, not published)
+.agents/
+.claude/
+.continue/
+.trae/
+.playwright-mcp/
+.codex/
+.cursor/
+AGENTS.md
+CLAUDE.md
+docs/superpowers/
