@@ -273,6 +273,14 @@ pub async fn supergrok_models() -> AppResult<Vec<VisionModel>> {
     .map_err(|_| AppError::Network("SuperGrok model list stopped unexpectedly".to_owned()))?
 }
 
+const REPOSITORY_URL: &str = "https://github.com/thejohnd0e/Meta-Pic-Interrogator";
+
+/// Opens the project page in the default browser (fixed URL only).
+#[tauri::command]
+pub fn open_repository() -> AppResult<()> {
+    crate::chatgpt::open_in_browser(REPOSITORY_URL)
+}
+
 #[tauri::command]
 pub fn cancel_description() -> AppResult<()> {
     request_registry().cancel()

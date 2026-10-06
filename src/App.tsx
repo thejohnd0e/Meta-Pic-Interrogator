@@ -40,6 +40,23 @@ function mimeForPath(path: string): string {
   return extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "image/png";
 }
 
+type ThemeChoice = "system" | "light" | "dark";
+const repositoryUrl = "https://github.com/thejohnd0e/Meta-Pic-Interrogator";
+
+function readThemeChoice(): ThemeChoice {
+  try {
+    const stored = localStorage.getItem("metapic-theme");
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function applyTheme(choice: ThemeChoice): void {
+  const dark = choice === "dark" || (choice === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}
+
 function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const activeRequestIdRef = useRef<number | null>(null);
@@ -73,6 +90,7 @@ function App() {
   const [subscriptionModels, setSubscriptionModels] = useState<Record<string, readonly VisionModel[]>>({});
   const [modelByProvider, setModelByProvider] = useState<Record<string, string>>({});
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [theme, setTheme] = useState<ThemeChoice>(readThemeChoice);
   const providerModels = subscriptionModels[provider] ?? [];
   const subscriptionProvider = providerOptions.find((item) => item.id === provider && item.mode === "subscription");
   const subscriptionConfigured = provider === "chatgpt" ? chatgpt.configured : provider === "xai" ? grok.configured : false;
@@ -107,6 +125,20 @@ function App() {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void commands.credentialStatus("proxy-password").then(setProxyPasswordSet).catch(() => setProxyPasswordSet(false));
   }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+    try {
+      localStorage.setItem("metapic-theme", theme);
+    } catch {
+      // Storage can be unavailable; the choice then lasts for this session only.
+    }
+    if (theme !== "system") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const follow = () => applyTheme("system");
+    query.addEventListener("change", follow);
+    return () => query.removeEventListener("change", follow);
+  }, [theme]);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -229,6 +261,11 @@ function App() {
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"] }],
     });
     if (typeof selected === "string") void selectNativePath(selected);
+  }
+
+  function openRepository(): void {
+    if ("__TAURI_INTERNALS__" in window) void commands.openRepository().catch(() => undefined);
+    else window.open(repositoryUrl, "_blank", "noopener");
   }
 
   function settingsPayload() {
@@ -490,7 +527,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.5",
+          appVersion: "0.1.6",
         },
       });
       setNotice("PNG copy saved.");
@@ -560,6 +597,13 @@ function App() {
           </div>
 
           <div className="settings-section">
+            <div className="section-heading"><div><span className="overline">Appearance</span><h3>Theme</h3></div></div>
+            <div className="settings-form">
+              <label>Color theme<select value={theme} onChange={(event) => setTheme(event.target.value as ThemeChoice)}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+            </div>
+          </div>
+
+          <div className="settings-section">
             <div className="section-heading"><div><span className="overline">Network</span><h3>Proxy</h3></div><span className={proxyEnabled ? "status" : "status busy"}>{proxyEnabled ? "Proxy on" : "Proxy off"}</span></div>
             <label className="check-row"><input type="checkbox" checked={proxyEnabled} onChange={(event) => setProxyEnabled(event.target.checked)} /> Use a proxy for all provider and sign-in requests</label>
             <div className="settings-form">
@@ -598,6 +642,10 @@ function App() {
           </div>
         </section>
       )}
+      <footer className="app-footer">
+        <span>Meta Pic Interrogator v{__APP_VERSION__}</span>
+        <button className="text-button" onClick={openRepository}>GitHub repository</button>
+      </footer>
     </main>
   );
 }

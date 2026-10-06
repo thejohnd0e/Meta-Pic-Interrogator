@@ -20,6 +20,7 @@ export const commands = {
   inspectImage: (input: InputImage): Promise<ImageInfo> => invoke<ImageInfo>("inspect_image", { input }),
   describeImage: (input: InputImage, provider: ProviderConfig, preset: Preset): Promise<DescriptionDraft> =>
     invoke<DescriptionDraft>("describe_image", { input, provider, preset }),
+  openRepository: (): Promise<void> => invoke<void>("open_repository"),
   cancelDescription: (): Promise<void> => invoke<void>("cancel_description"),
   listPresets: (): Promise<readonly Preset[]> => invoke<readonly Preset[]>("list_presets"),
   loadSettings: (): Promise<SettingsDocument> => invoke<SettingsDocument>("load_settings"),

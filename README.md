@@ -18,6 +18,7 @@ A small Windows desktop app that describes an image with a vision model and save
 - **Editable result**: review and edit the description, choose a preset (Concise, Detailed, Appearance, Clothing, Composition, Photography) or write your own.
 - **Metadata that other tools can read**: the saved PNG carries the text in several standard places (see below), so it shows up in viewers such as [Eagle](https://eagle.cool) with a `Parameters` reader plugin.
 - **Optional proxy**: HTTP or SOCKS5 for every request the app makes, useful where a provider blocks your region.
+- **Light and dark theme**: follows the system or is set in Settings.
 - **Remembers your choices**: last provider, model per provider, endpoint, and preset.
 - **Private by design**: API keys, refresh tokens, and proxy passwords live in Windows Credential Manager. Access tokens are kept in memory only.
 - Input formats: PNG, JPEG, WebP, BMP, TIFF. Drag and drop or use the file dialog.

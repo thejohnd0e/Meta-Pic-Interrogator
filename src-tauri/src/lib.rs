@@ -30,6 +30,7 @@ pub fn run() {
             commands::inspect_image,
             commands::describe_image,
             commands::cancel_description,
+            commands::open_repository,
             commands::chatgpt_status,
             commands::chatgpt_sign_in,
             commands::chatgpt_cancel_sign_in,
