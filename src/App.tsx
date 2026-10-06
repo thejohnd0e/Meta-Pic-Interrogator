@@ -4,10 +4,14 @@ import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "./lib/commands";
+import { PresetManager } from "./PresetManager";
+import { PresetPicker } from "./PresetPicker";
+import { readRecentPresets, rememberPreset, sortPresets } from "./lib/presets";
 import { decodeAppError, type ChatGptStatus, type DeviceCode, type ProxyKind, type SuperGrokStatus, type VisionModel } from "./lib/contracts";
 import "./App.css";
 
 type Preset = { id: string; name: string; prompt: string };
+type View = "workspace" | "settings" | "presets";
 type DescriptionStarted = { requestId: number };
 type DescriptionDelta = { requestId: number; text: string };
 type ProviderOption = { id: string; name: string; mode: "api" | "subscription"; vision: boolean; endpoint: string; defaultModel: string };
@@ -75,7 +79,10 @@ function App() {
   const [presets, setPresets] = useState(initialPresets);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Ready for an image");
-  const [settings, setSettings] = useState(false);
+  const [view, setView] = useState<View>("workspace");
+  const viewRef = useRef<View>("workspace");
+  viewRef.current = view;
+  const [recentPresetIds, setRecentPresetIds] = useState<string[]>(readRecentPresets);
   const [chatgpt, setChatgpt] = useState<ChatGptStatus>({ configured: false, email: null });
   const [proxyEnabled, setProxyEnabled] = useState(false);
   const [proxyKind, setProxyKind] = useState<ProxyKind>("http");
@@ -116,10 +123,15 @@ function App() {
         setProxyAddress(saved.proxy.address);
         setProxyUser(saved.proxy.username ?? "");
       }
-      if (storedPresets.length > 0) setPresets(storedPresets as Preset[]);
+      if (storedPresets.length > 0) setPresets(sortPresets(storedPresets));
       setSettingsLoaded(true);
     }).catch(() => setSettingsNotice("Could not load saved settings."));
   }, []);
+
+  // A deleted or renamed-away preset must not stay selected.
+  useEffect(() => {
+    if (presets.length > 0 && !presets.some((item) => item.id === presetId)) setPresetId(presets[0].id);
+  }, [presets, presetId]);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -201,7 +213,7 @@ function App() {
     let mounted = true;
     let unlisten: (() => void) | undefined;
     void getCurrentWebviewWindow().onDragDropEvent((event) => {
-      if (!mounted) return;
+      if (!mounted || viewRef.current !== "workspace") return;
       if (event.payload.type === "enter" || event.payload.type === "over") {
         setNotice("Drop one supported image to load it.");
       } else if (event.payload.type === "drop" && event.payload.paths[0]) {
@@ -473,16 +485,6 @@ function App() {
     }
   }
 
-  async function persistPreset(preset: Preset): Promise<void> {
-    if (!("__TAURI_INTERNALS__" in window)) return;
-    try {
-      await commands.updatePreset(preset);
-      setSettingsNotice("Preset saved.");
-    } catch (error) {
-      setSettingsNotice(error instanceof Error ? error.message : "Could not save preset.");
-    }
-  }
-
   async function describe(): Promise<void> {
     const sourcePath = nativePath;
     if (!sourcePath) {
@@ -496,6 +498,7 @@ function App() {
     }
     const preset = presets.find((item) => item.id === presetId) ?? presets[0];
     if (!preset) return;
+    setRecentPresetIds((current) => rememberPreset(current, preset.id));
     setBusy(true);
     setDescription("");
     setNotice("Sending image to the selected vision provider...");
@@ -540,7 +543,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.10",
+          appVersion: "0.1.11",
         },
       });
       setNotice("PNG copy saved.");
@@ -552,15 +555,19 @@ function App() {
   }
 
   return (
-    <main className={settings ? "app-shell" : "app-shell fit"}>
+    <main className={view === "settings" ? "app-shell" : "app-shell fit"}>
       <header className="topbar">
         <div><span className="overline">Meta Pic / Interrogator</span><h1>Image, then evidence.</h1></div>
         <div className="topbar-actions">
           {busy && <button className="text-button" onClick={() => void commands.cancelDescription()}>Cancel</button>}
-          <button className="text-button" onClick={() => setSettings(!settings)}>{settings ? "Back to workspace" : "Settings"}</button>
+          {view !== "presets" && <button className="text-button" onClick={() => setView("presets")}>Presets</button>}
+          {view !== "settings" && <button className="text-button" onClick={() => setView("settings")}>Settings</button>}
+          {view !== "workspace" && <button className="text-button" onClick={() => setView("workspace")}>Back to workspace</button>}
         </div>
       </header>
-      {settings ? (
+      {view === "presets" ? (
+        <PresetManager presets={presets} setPresets={setPresets} activeId={presetId} onUse={setPresetId} />
+      ) : view === "settings" ? (
         <section className="settings-panel">
           <span className="overline">Access settings</span>
           <h2>Connect your account</h2>
@@ -632,7 +639,8 @@ function App() {
 
           <div className="settings-section">
             <div className="section-heading"><div><span className="overline">Prompt library</span><h3>Presets</h3></div></div>
-            {presets.map((item) => <label className="preset-row" key={item.id}><span>{item.name}</span><input value={item.prompt} onChange={(event) => setPresets(presets.map((preset) => preset.id === item.id ? { ...preset, prompt: event.target.value } : preset))} onBlur={() => void persistPreset(presets.find((preset) => preset.id === item.id) ?? item)} /></label>)}
+            <p className="muted">{presets.length} preset{presets.length === 1 ? "" : "s"}, each stored as a Markdown file. Create, edit, import, and export them in the preset editor.</p>
+            <div className="action-row"><button className="primary-button" onClick={() => setView("presets")}>Open preset editor</button></div>
           </div>
         </section>
       ) : (
@@ -652,9 +660,9 @@ function App() {
                   ? <select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select>
                   : <input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder={providerOptions.find((item) => item.id === provider)?.defaultModel || "Model id"} />}
                 {canListModels && <button type="button" className={modelsLoading ? "icon-button spinning" : "icon-button"} title="Refresh model list" aria-label="Refresh model list" disabled={modelsLoading} onClick={() => void loadModels(provider)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></svg></button>}
-              </span>{providerModels.length === 0 && subscriptionProvider && <small className="muted">{subscriptionConfigured ? "Loading models..." : "Sign in with " + subscriptionProvider.name + " in Settings to load models."}</small>}</label><label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
+              </span>{providerModels.length === 0 && subscriptionProvider && <small className="muted">{subscriptionConfigured ? "Loading models..." : "Sign in with " + subscriptionProvider.name + " in Settings to load models."}</small>}</label><PresetPicker presets={presets} value={presetId} recentIds={recentPresetIds} onChange={setPresetId} onEdit={() => setView("presets")} /></div>
             <label className="description-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Your generated description will appear here. You can edit it before saving." /></label>
-            <div className="action-row"><button className="primary-button" disabled={!nativePath || busy || !providerOptions.find((item) => item.id === provider)?.vision} onClick={() => void describe()}>{busy ? "Describing..." : "Describe image"}</button><button className="primary-button" disabled={!description.trim() || !nativePath || busy} onClick={() => void save()}>Save PNG copy</button></div>
+            <div className="action-row"><button className="primary-button" disabled={!nativePath || busy || presets.length === 0 || !providerOptions.find((item) => item.id === provider)?.vision} onClick={() => void describe()}>{busy ? "Describing..." : "Describe image"}</button><button className="primary-button" disabled={!description.trim() || !nativePath || busy} onClick={() => void save()}>Save PNG copy</button></div>
           </div>
         </section>
       )}

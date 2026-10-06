@@ -7,6 +7,7 @@ pub mod image;
 pub mod metadata;
 pub mod network;
 pub mod oauth;
+pub mod presets;
 pub mod providers;
 pub mod settings;
 pub mod supergrok;
@@ -51,6 +52,9 @@ pub fn run() {
             commands::create_preset,
             commands::update_preset,
             commands::delete_preset,
+            commands::import_presets,
+            commands::export_preset,
+            commands::open_presets_folder,
             commands::provider_status,
             commands::credential_status,
             commands::refresh_models,

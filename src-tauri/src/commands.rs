@@ -43,6 +43,16 @@ fn settings_store(app: &tauri::AppHandle) -> AppResult<crate::settings::Settings
     ))
 }
 
+fn preset_store(app: &tauri::AppHandle) -> AppResult<crate::presets::PresetStore> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| AppError::LocalMetadata(error.to_string()))?;
+    let store = crate::presets::PresetStore::new(directory.join("presets"));
+    store.initialize(&settings_store(app)?)?;
+    Ok(store)
+}
+
 fn request_registry() -> &'static crate::providers::RequestRegistry {
     REQUEST_REGISTRY.get_or_init(Default::default)
 }
@@ -342,7 +352,7 @@ pub fn cancel_description() -> AppResult<()> {
 
 #[tauri::command]
 pub fn list_presets(app: tauri::AppHandle) -> AppResult<Vec<Preset>> {
-    settings_store(&app)?.list_presets()
+    preset_store(&app)?.list()
 }
 
 #[tauri::command]
@@ -411,17 +421,52 @@ pub fn save_proxy(
 
 #[tauri::command]
 pub fn create_preset(app: tauri::AppHandle, preset: Preset) -> AppResult<Preset> {
-    settings_store(&app)?.create_preset(preset)
+    preset_store(&app)?.create(preset)
 }
 
 #[tauri::command]
 pub fn update_preset(app: tauri::AppHandle, preset: Preset) -> AppResult<Preset> {
-    settings_store(&app)?.update_preset(preset)
+    preset_store(&app)?.update(preset)
 }
 
 #[tauri::command]
 pub fn delete_preset(app: tauri::AppHandle, preset_id: String) -> AppResult<()> {
-    settings_store(&app)?.delete_preset(&preset_id)
+    preset_store(&app)?.delete(&preset_id)
+}
+
+#[tauri::command]
+pub fn import_presets(app: tauri::AppHandle, paths: Vec<String>) -> AppResult<Vec<Preset>> {
+    preset_store(&app)?.import(&paths)
+}
+
+#[tauri::command]
+pub fn export_preset(
+    app: tauri::AppHandle,
+    preset_id: String,
+    destination: String,
+) -> AppResult<()> {
+    preset_store(&app)?.export(&preset_id, std::path::Path::new(&destination))
+}
+
+/// Opens the presets folder in the file manager.
+#[tauri::command]
+pub fn open_presets_folder(app: tauri::AppHandle) -> AppResult<()> {
+    let store = preset_store(&app)?;
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(store.dir())
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| AppError::LocalMetadata("could not open the presets folder".to_owned()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = store;
+        Err(AppError::NotImplemented(
+            "opening the presets folder is supported on Windows only".to_owned(),
+        ))
+    }
 }
 
 #[tauri::command]

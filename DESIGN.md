@@ -35,7 +35,7 @@ Quiet editorial workbench: warm bone paper, charcoal ink, and one muted ochre ac
 - `StatusPill`: checking, ready, unavailable; text and tonal wash only.
 - `PrimaryButton`: idle, disabled, busy; dark ink background with focus-visible outline.
 - `DescriptionEditor`: clean, dirty, error; preserves edited text.
-- `SettingsForm`: subscription access status, API fallback fields, secure credential actions, and persisted preset rows.
+- `SettingsForm`: subscription access status, API fallback fields, secure credential actions, and a link to the preset editor. `PresetManager` (list, search, plain-text editor, import/export, drag-and-drop) and `PresetPicker` (searchable chooser on the main screen) use one `.md` file per preset in `<app data>/presets/`; legacy presets in `settings.json` are migrated on first run.
 
 ## 6. Interaction & Motion
 - Only transform/opacity transitions; no decorative motion.
