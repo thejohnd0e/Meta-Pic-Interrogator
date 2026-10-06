@@ -264,8 +264,13 @@ function App() {
         setProxyPassword("");
         setProxyPasswordSet(true);
       }
-      await commands.saveProxy({ enabled: proxyEnabled, kind: proxyKind, address: proxyAddress, username: proxyUser.trim() || null });
-      setSettingsNotice(proxyEnabled ? "Proxy enabled for all requests." : "Proxy disabled.");
+      const saved = await commands.saveProxy({ enabled: proxyEnabled, kind: proxyKind, address: proxyAddress, username: proxyUser.trim() || null });
+      setProxyKind(saved.kind);
+      setProxyAddress(saved.address);
+      setProxyUser(saved.username ?? "");
+      setSettingsNotice(saved.enabled ? "Proxy enabled for all requests." : "Proxy disabled.");
+      setNotice("Proxy settings saved.");
+      if (chatgpt.configured) await loadChatgptModels();
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "Could not save proxy settings.");
     } finally {
@@ -400,7 +405,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.1",
+          appVersion: "0.1.2",
         },
       });
       setNotice("PNG copy saved.");

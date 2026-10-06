@@ -263,20 +263,19 @@ pub fn apply_stored_proxy(app: &tauri::AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn save_proxy(app: tauri::AppHandle, proxy: crate::network::ProxySettings) -> AppResult<()> {
-    let mut proxy = proxy;
-    proxy.address = proxy.address.trim().to_owned();
-    proxy.username = proxy
-        .username
-        .map(|user| user.trim().to_owned())
-        .filter(|user| !user.is_empty());
+pub fn save_proxy(
+    app: tauri::AppHandle,
+    proxy: crate::network::ProxySettings,
+) -> AppResult<crate::network::ProxySettings> {
+    let proxy = crate::network::normalize(&proxy)?;
     // Validate before persisting so a bad value never reaches settings.json.
     crate::network::proxy_url(&proxy, None)?;
     let store = settings_store(&app)?;
     let mut current = store.load()?;
-    current.proxy = Some(proxy);
+    current.proxy = Some(proxy.clone());
     store.save(&current)?;
-    apply_stored_proxy(&app)
+    apply_stored_proxy(&app)?;
+    Ok(proxy)
 }
 
 #[tauri::command]

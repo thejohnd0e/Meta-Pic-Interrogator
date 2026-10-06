@@ -37,6 +37,32 @@ fn invalid(text: &str) -> AppError {
     AppError::InvalidPath(text.to_owned())
 }
 
+/// Trims input and accepts a pasted `http://`, `socks5://` or `socks5h://`
+/// prefix, which then decides the proxy type.
+pub fn normalize(settings: &ProxySettings) -> AppResult<ProxySettings> {
+    let mut address = settings.address.trim().trim_end_matches('/').to_owned();
+    let mut kind = settings.kind;
+    if let Some((scheme, rest)) = address.split_once("://") {
+        kind = match scheme.to_ascii_lowercase().as_str() {
+            "http" => ProxyKind::Http,
+            "socks5" | "socks5h" => ProxyKind::Socks5,
+            _ => return Err(invalid("proxy scheme must be http or socks5")),
+        };
+        address = rest.to_owned();
+    }
+    Ok(ProxySettings {
+        enabled: settings.enabled,
+        kind,
+        address,
+        username: settings
+            .username
+            .as_deref()
+            .map(str::trim)
+            .filter(|user| !user.is_empty())
+            .map(str::to_owned),
+    })
+}
+
 /// Validates the settings and builds the proxy URL, or `None` when disabled.
 /// SOCKS5 uses `socks5h` so that DNS is resolved by the proxy.
 pub fn proxy_url(
@@ -144,6 +170,20 @@ mod tests {
             .expect("plain")
             .expect("url");
         assert!(plain.password().is_none());
+    }
+
+    #[test]
+    fn pasted_scheme_decides_the_type_and_is_stripped() {
+        let pasted = normalize(&settings(ProxyKind::Socks5, " http://192.168.0.12:9102/ "))
+            .expect("normalize");
+        assert_eq!(pasted.kind, ProxyKind::Http);
+        assert_eq!(pasted.address, "192.168.0.12:9102");
+        let socks =
+            normalize(&settings(ProxyKind::Http, "SOCKS5h://proxy.local:1080")).expect("normalize");
+        assert_eq!(socks.kind, ProxyKind::Socks5);
+        assert!(normalize(&settings(ProxyKind::Http, "ftp://x:1")).is_err());
+        let plain = normalize(&settings(ProxyKind::Http, "10.0.0.1:3128")).expect("plain");
+        assert_eq!(plain.address, "10.0.0.1:3128");
     }
 
     #[test]
