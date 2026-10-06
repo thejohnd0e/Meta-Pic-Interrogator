@@ -14,7 +14,7 @@ A small Windows desktop app that describes an image with a vision model and save
 ## Features
 
 - **Subscription sign-in**: ChatGPT plan usage (Sign in with ChatGPT) and SuperGrok, with no API key needed.
-- **API key fallback**: OpenAI and OpenAI-compatible endpoints, with streaming output.
+- **API key providers**: OpenAI, OpenAI-compatible endpoints, and Google Gemini (key from AI Studio), with streaming output and a refreshable model list.
 - **Editable result**: review and edit the description, choose a preset (Concise, Detailed, Appearance, Clothing, Composition, Photography) or write your own.
 - **Metadata that other tools can read**: the saved PNG carries the text in several standard places (see below), so it shows up in viewers such as [Eagle](https://eagle.cool) with a `Parameters` reader plugin.
 - **Optional proxy**: HTTP or SOCKS5 for every request the app makes, useful where a provider blocks your region.
