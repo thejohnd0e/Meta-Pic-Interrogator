@@ -84,7 +84,7 @@ The installers are written to `src-tauri/target/release/bundle/`.
 ### Layout
 
 - `src/`: React frontend (`App.tsx`, typed command wrappers in `src/lib/`).
-- `src-tauri/src/`: Rust core: `image/` (decode, normalize, encode), `metadata.rs` (PNG chunks), `providers.rs`, `chatgpt.rs` and `oauth.rs` (ChatGPT), `supergrok.rs`, `network.rs` (proxy), `credentials.rs`, `settings.rs`, `commands.rs`.
+- `src-tauri/src/`: Rust core: `image/` (decode, normalize, encode), `metadata.rs` (PNG chunks), `providers.rs`, `gemini.rs`, `chatgpt.rs` and `oauth.rs` (ChatGPT), `supergrok.rs`, `network.rs` (proxy), `credentials.rs`, `settings.rs`, `commands.rs`.
 - `DESIGN.md`, `DECISIONS.md`: design tokens and recorded decisions.
 
 ## License
