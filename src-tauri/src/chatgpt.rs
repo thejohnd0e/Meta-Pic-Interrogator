@@ -46,14 +46,14 @@ pub struct ChatGptStatus {
     pub email: Option<String>,
 }
 
-fn auth_client() -> AppResult<reqwest::blocking::Client> {
+pub(crate) fn auth_client() -> AppResult<reqwest::blocking::Client> {
     crate::network::client_builder()?
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|_| AppError::Network("ChatGPT client unavailable".to_owned()))
 }
 
-fn post_form(
+pub(crate) fn post_form(
     client: &reqwest::blocking::Client,
     url: &str,
     form: &[(&'static str, String)],
@@ -483,12 +483,17 @@ fn map_status(status: u16) -> AppError {
 
 pub struct ResponsesTransport {
     client: reqwest::blocking::Client,
+    base: String,
     access_token: String,
     model: String,
 }
 
 impl ResponsesTransport {
     pub fn new(access_token: &str, model: &str) -> AppResult<Self> {
+        Self::with_base(API_BASE, access_token, model)
+    }
+
+    pub fn with_base(base: &str, access_token: &str, model: &str) -> AppResult<Self> {
         if access_token.is_empty() || model.trim().is_empty() {
             return Err(AppError::InvalidPath(
                 "ChatGPT sign-in and model are required".to_owned(),
@@ -500,6 +505,7 @@ impl ResponsesTransport {
             .map_err(|_| AppError::Network("ChatGPT client unavailable".to_owned()))?;
         Ok(Self {
             client,
+            base: base.trim_end_matches('/').to_owned(),
             access_token: access_token.to_owned(),
             model: model.to_owned(),
         })
@@ -522,7 +528,7 @@ impl Transport for ResponsesTransport {
             build_responses_payload(&self.model, &request.prompt, &request.mime, &encoded);
         let response = self
             .client
-            .post(format!("{API_BASE}/responses"))
+            .post(format!("{}/responses", self.base))
             .bearer_auth(&self.access_token)
             .header("Accept", "text/event-stream")
             .json(&payload)
@@ -581,8 +587,18 @@ pub fn parse_models(value: &Value) -> AppResult<Vec<VisionModel>> {
 }
 
 pub fn list_models(access_token: &str) -> AppResult<Vec<VisionModel>> {
+    let models = fetch_models(API_BASE, access_token)?;
+    if models.is_empty() {
+        return Err(AppError::UnavailableModel(
+            "ChatGPT returned no usable models for this plan".to_owned(),
+        ));
+    }
+    Ok(models)
+}
+
+pub(crate) fn fetch_models(base: &str, access_token: &str) -> AppResult<Vec<VisionModel>> {
     let response = auth_client()?
-        .get(format!("{API_BASE}/models"))
+        .get(format!("{base}/models"))
         .bearer_auth(access_token)
         .send()
         .map_err(|_| AppError::Network("ChatGPT model list unavailable".to_owned()))?;
@@ -598,13 +614,7 @@ pub fn list_models(access_token: &str) -> AppResult<Vec<VisionModel>> {
     let value: Value = response
         .json()
         .map_err(|_| AppError::MalformedResponse("ChatGPT model list was not JSON".to_owned()))?;
-    let models = parse_models(&value)?;
-    if models.is_empty() {
-        return Err(AppError::UnavailableModel(
-            "ChatGPT returned no usable models for this plan".to_owned(),
-        ));
-    }
-    Ok(models)
+    parse_models(&value)
 }
 
 #[cfg(test)]

@@ -191,9 +191,14 @@ pub struct TokenResponse {
     pub refresh_token: Option<String>,
     #[serde(default)]
     pub id_token: Option<String>,
+    #[serde(default = "default_expires_in")]
     pub expires_in: u64,
     #[serde(default)]
     pub scope: String,
+}
+
+fn default_expires_in() -> u64 {
+    3600
 }
 
 impl TokenResponse {
@@ -335,6 +340,20 @@ pub enum RefreshFailure {
     InvalidClient,
     /// Network or server trouble: keep credentials and retry later.
     Transient,
+}
+
+/// The OAuth `error` code of a response body, or an empty string.
+pub fn error_code(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            let error = value.get("error")?;
+            error
+                .as_str()
+                .or_else(|| error.get("code").and_then(serde_json::Value::as_str))
+                .map(str::to_owned)
+        })
+        .unwrap_or_default()
 }
 
 /// Short, token-free summary of an OAuth error body for diagnostics.

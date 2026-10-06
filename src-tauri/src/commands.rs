@@ -151,7 +151,18 @@ pub fn describe_image(
     if registry.is_cancelled()? {
         return Err(AppError::Cancellation("description cancelled".to_owned()));
     }
-    let backend: Box<dyn VisionBackend> = if provider.provider_id == crate::chatgpt::PROVIDER_ID {
+    let backend: Box<dyn VisionBackend> = if provider.provider_id == crate::supergrok::PROVIDER_ID {
+        let token = with_credential_store(|store| crate::supergrok::access_token(store))?;
+        Box::new(crate::providers::ApiProvider::new_with_model(
+            provider.provider_id.clone(),
+            crate::chatgpt::ResponsesTransport::with_base(
+                crate::supergrok::API_BASE,
+                &token,
+                &provider.model_id,
+            )?,
+            provider.model_id.clone(),
+        ))
+    } else if provider.provider_id == crate::chatgpt::PROVIDER_ID {
         let token = with_credential_store(|store| crate::chatgpt::access_token(store))?;
         Box::new(crate::providers::ApiProvider::new_with_model(
             provider.provider_id.clone(),
@@ -212,6 +223,57 @@ pub async fn chatgpt_models() -> AppResult<Vec<VisionModel>> {
 }
 
 #[tauri::command]
+pub fn supergrok_status() -> AppResult<crate::supergrok::SuperGrokStatus> {
+    with_credential_store(|store| crate::supergrok::status(store))
+}
+
+/// Requests a device code and opens the approval page in the browser.
+#[tauri::command]
+pub async fn supergrok_begin_sign_in() -> AppResult<crate::supergrok::DeviceCode> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let code = crate::supergrok::begin_sign_in()?;
+        // The code is also shown in the app, so a failed launch is not fatal.
+        let _ = crate::chatgpt::open_in_browser(&code.verification_url);
+        Ok(code)
+    })
+    .await
+    .map_err(|_| AppError::Network("SuperGrok sign-in stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
+pub async fn supergrok_finish_sign_in() -> AppResult<crate::supergrok::SuperGrokStatus> {
+    tauri::async_runtime::spawn_blocking(|| {
+        with_credential_store(|store| crate::supergrok::finish_sign_in(store))
+    })
+    .await
+    .map_err(|_| AppError::Network("SuperGrok sign-in stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
+pub fn supergrok_cancel_sign_in() {
+    crate::supergrok::cancel_sign_in();
+}
+
+#[tauri::command]
+pub async fn supergrok_sign_out() -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(|| {
+        with_credential_store(|store| crate::supergrok::sign_out(store))
+    })
+    .await
+    .map_err(|_| AppError::Network("SuperGrok sign-out stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
+pub async fn supergrok_models() -> AppResult<Vec<VisionModel>> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let token = with_credential_store(|store| crate::supergrok::access_token(store))?;
+        crate::supergrok::list_models(&token)
+    })
+    .await
+    .map_err(|_| AppError::Network("SuperGrok model list stopped unexpectedly".to_owned()))?
+}
+
+#[tauri::command]
 pub fn cancel_description() -> AppResult<()> {
     request_registry().cancel()
 }
@@ -226,6 +288,7 @@ pub fn load_settings(app: tauri::AppHandle) -> AppResult<SettingsDocument> {
     let settings = settings_store(&app)?.load()?;
     Ok(SettingsDocument {
         proxy: settings.proxy,
+        model_by_provider: settings.model_by_provider,
         schema_version: settings.schema_version,
         provider_id: settings.provider_id,
         model_id: settings.model_id,
@@ -251,6 +314,12 @@ pub fn save_settings(app: tauri::AppHandle, settings: SettingsDocument) -> AppRe
     current.model_id = settings.model_id;
     current.endpoint = settings.endpoint;
     current.preset_id = settings.preset_id;
+    current.model_by_provider = settings
+        .model_by_provider
+        .into_iter()
+        .filter(|(provider, model)| !provider.is_empty() && !model.is_empty())
+        .take(32)
+        .collect();
     store.save(&current)
 }
 

@@ -8,6 +8,7 @@ pub mod network;
 pub mod oauth;
 pub mod providers;
 pub mod settings;
+pub mod supergrok;
 
 #[tauri::command]
 fn health() -> &'static str {
@@ -34,6 +35,12 @@ pub fn run() {
             commands::chatgpt_cancel_sign_in,
             commands::chatgpt_sign_out,
             commands::chatgpt_models,
+            commands::supergrok_status,
+            commands::supergrok_begin_sign_in,
+            commands::supergrok_finish_sign_in,
+            commands::supergrok_cancel_sign_in,
+            commands::supergrok_sign_out,
+            commands::supergrok_models,
             commands::list_presets,
             commands::load_settings,
             commands::save_settings,

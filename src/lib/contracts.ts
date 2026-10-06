@@ -36,6 +36,8 @@ export type Provenance = Readonly<{
 }>;
 export type SaveRequest = Readonly<{ sourcePath: string; destinationPath: string; description: string; provenance: Provenance }>;
 export type AppError = Readonly<{ category: ErrorCategory; message?: string }>;
+export type SuperGrokStatus = Readonly<{ configured: boolean; email: string | null }>;
+export type DeviceCode = Readonly<{ userCode: string; verificationUrl: string; expiresIn: number }>;
 export type ProxyKind = "http" | "socks5";
 export type ProxySettings = Readonly<{ enabled: boolean; kind: ProxyKind; address: string; username: string | null }>;
 export type SettingsDocument = Readonly<{
@@ -45,6 +47,7 @@ export type SettingsDocument = Readonly<{
   endpoint: string | null;
   presetId: string | null;
   proxy?: ProxySettings | null;
+  modelByProvider?: Readonly<Record<string, string>>;
 }>;
 
 const isErrorCategory = (value: unknown): value is ErrorCategory =>

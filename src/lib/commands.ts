@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ChatGptStatus,
+  DeviceCode,
   DescriptionDraft,
   ImageInfo,
   InputImage,
@@ -9,6 +10,7 @@ import type {
   ProxySettings,
   SettingsDocument,
   SaveRequest,
+  SuperGrokStatus,
   VisionCapabilities,
   VisionModel,
 } from "./contracts";
@@ -36,5 +38,11 @@ export const commands = {
   chatgptCancelSignIn: (): Promise<void> => invoke<void>("chatgpt_cancel_sign_in"),
   chatgptSignOut: (): Promise<void> => invoke<void>("chatgpt_sign_out"),
   chatgptModels: (): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("chatgpt_models"),
+  supergrokStatus: (): Promise<SuperGrokStatus> => invoke<SuperGrokStatus>("supergrok_status"),
+  supergrokBeginSignIn: (): Promise<DeviceCode> => invoke<DeviceCode>("supergrok_begin_sign_in"),
+  supergrokFinishSignIn: (): Promise<SuperGrokStatus> => invoke<SuperGrokStatus>("supergrok_finish_sign_in"),
+  supergrokCancelSignIn: (): Promise<void> => invoke<void>("supergrok_cancel_sign_in"),
+  supergrokSignOut: (): Promise<void> => invoke<void>("supergrok_sign_out"),
+  supergrokModels: (): Promise<readonly VisionModel[]> => invoke<readonly VisionModel[]>("supergrok_models"),
   savePngCopy: (request: SaveRequest): Promise<string> => invoke<string>("save_png_copy", { request }),
 } as const;

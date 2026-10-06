@@ -130,6 +130,9 @@ pub struct SettingsDocument {
     pub preset_id: Option<String>,
     #[serde(default)]
     pub proxy: Option<crate::network::ProxySettings>,
+    /// Last model used with each provider.
+    #[serde(default)]
+    pub model_by_provider: std::collections::BTreeMap<String, String>,
 }
 
 impl SettingsDocument {

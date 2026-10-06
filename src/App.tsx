@@ -4,7 +4,7 @@ import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "./lib/commands";
-import { decodeAppError, type ChatGptStatus, type ProxyKind, type VisionModel } from "./lib/contracts";
+import { decodeAppError, type ChatGptStatus, type DeviceCode, type ProxyKind, type SuperGrokStatus, type VisionModel } from "./lib/contracts";
 import "./App.css";
 
 type Preset = { id: string; name: string; prompt: string };
@@ -24,7 +24,7 @@ const providerOptions: ProviderOption[] = [
   { id: "gemini", name: "Google Gemini API", mode: "api", vision: false, endpoint: "https://generativelanguage.googleapis.com" },
   { id: "openrouter", name: "OpenRouter API", mode: "api", vision: false, endpoint: "https://openrouter.ai/api" },
   { id: "chatgpt", name: "ChatGPT Plus", mode: "subscription", vision: true, endpoint: "" },
-  { id: "xai", name: "SuperGrok", mode: "subscription", vision: false, endpoint: "" },
+  { id: "xai", name: "SuperGrok", mode: "subscription", vision: true, endpoint: "" },
 ];
 
 const supportedExtensions = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
@@ -67,13 +67,24 @@ function App() {
   const [proxyPassword, setProxyPassword] = useState("");
   const [proxyPasswordSet, setProxyPasswordSet] = useState(false);
   const [chatgptBusy, setChatgptBusy] = useState(false);
-  const [chatgptModels, setChatgptModels] = useState<readonly VisionModel[]>([]);
+  const [grok, setGrok] = useState<SuperGrokStatus>({ configured: false, email: null });
+  const [grokBusy, setGrokBusy] = useState(false);
+  const [grokCode, setGrokCode] = useState<DeviceCode | null>(null);
+  const [subscriptionModels, setSubscriptionModels] = useState<Record<string, readonly VisionModel[]>>({});
+  const [modelByProvider, setModelByProvider] = useState<Record<string, string>>({});
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const providerModels = subscriptionModels[provider] ?? [];
+  const subscriptionProvider = providerOptions.find((item) => item.id === provider && item.mode === "subscription");
+  const subscriptionConfigured = provider === "chatgpt" ? chatgpt.configured : provider === "xai" ? grok.configured : false;
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void Promise.all([commands.loadSettings(), commands.listPresets()]).then(([saved, storedPresets]) => {
+      const remembered = saved.modelByProvider ?? {};
+      setModelByProvider(remembered);
       if (saved.providerId) setProvider(saved.providerId);
-      if (saved.modelId) setModel(saved.modelId);
+      const savedModel = (saved.providerId ? remembered[saved.providerId] : undefined) ?? saved.modelId;
+      if (savedModel) setModel(savedModel);
       if (saved.endpoint) setEndpoint(saved.endpoint);
       if (saved.presetId) setPresetId(saved.presetId);
       if (saved.proxy) {
@@ -83,6 +94,7 @@ function App() {
         setProxyUser(saved.proxy.username ?? "");
       }
       if (storedPresets.length > 0) setPresets(storedPresets as Preset[]);
+      setSettingsLoaded(true);
     }).catch(() => setSettingsNotice("Could not load saved settings."));
   }, []);
 
@@ -97,10 +109,25 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (provider !== "chatgpt" || !chatgpt.configured || chatgptModels.length > 0) return;
-    void loadChatgptModels();
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    void commands.supergrokStatus().then(setGrok).catch(() => setGrok({ configured: false, email: null }));
+  }, []);
+
+  useEffect(() => {
+    if (!subscriptionConfigured || (subscriptionModels[provider]?.length ?? 0) > 0) return;
+    void loadModels(provider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, chatgpt.configured]);
+  }, [provider, subscriptionConfigured]);
+
+  // Remember the last provider, model per provider, endpoint, and preset.
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const timer = window.setTimeout(() => {
+      void commands.saveSettings(settingsPayload()).catch(() => undefined);
+    }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoaded, provider, model, endpoint, presetId, modelByProvider]);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -204,14 +231,34 @@ function App() {
     if (typeof selected === "string") void selectNativePath(selected);
   }
 
+  function settingsPayload() {
+    const trimmed = model.trim();
+    return {
+      schemaVersion: 1,
+      providerId: provider,
+      modelId: trimmed || null,
+      endpoint: endpoint || null,
+      presetId,
+      modelByProvider: trimmed ? { ...modelByProvider, [provider]: trimmed } : modelByProvider,
+    };
+  }
+
+  function chooseModel(value: string): void {
+    setModel(value);
+    setModelByProvider((previous) => ({ ...previous, [provider]: value }));
+  }
+
   function selectProvider(providerId: string): void {
     const next = providerOptions.find((item) => item.id === providerId);
     setProvider(providerId);
     if (next?.endpoint) setEndpoint(next.endpoint);
+    const remembered = modelByProvider[providerId];
+    if (remembered) setModel(remembered);
+    else if (next?.mode === "subscription") setModel("");
     if (providerId === "chatgpt") {
       setSettingsNotice(chatgpt.configured ? "" : "Sign in with ChatGPT below to use your plan.");
-    } else if (next?.mode === "subscription") {
-      setSettingsNotice("Subscription sign-in is not available for this provider.");
+    } else if (providerId === "xai") {
+      setSettingsNotice(grok.configured ? "" : "Sign in with SuperGrok below to use your plan.");
     } else {
       setSettingsNotice("");
     }
@@ -224,7 +271,7 @@ function App() {
     }
     setSettingsBusy(true);
     try {
-      await commands.saveSettings({ schemaVersion: 1, providerId: provider, modelId: model, endpoint: endpoint || null, presetId });
+      await commands.saveSettings(settingsPayload());
       if (credential.trim()) {
         await commands.setCredential(provider, credential.trim());
         setCredential("");
@@ -270,7 +317,7 @@ function App() {
       setProxyUser(saved.username ?? "");
       setSettingsNotice(saved.enabled ? "Proxy enabled for all requests." : "Proxy disabled.");
       setNotice("Proxy settings saved.");
-      if (chatgpt.configured) await loadChatgptModels();
+      if (subscriptionConfigured) await loadModels(provider);
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "Could not save proxy settings.");
     } finally {
@@ -303,7 +350,7 @@ function App() {
       const status = await commands.chatgptSignIn();
       setChatgpt(status);
       setSettingsNotice("Signed in with ChatGPT.");
-      await loadChatgptModels();
+      await loadModels("chatgpt");
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "ChatGPT sign-in failed.");
     } finally {
@@ -316,7 +363,7 @@ function App() {
     try {
       await commands.chatgptSignOut();
       setChatgpt({ configured: false, email: null });
-      setChatgptModels([]);
+      setSubscriptionModels((previous) => ({ ...previous, chatgpt: [] }));
       setSettingsNotice("Signed out of ChatGPT.");
     } catch (error) {
       setSettingsNotice(decodeAppError(error).message ?? "Could not sign out.");
@@ -325,14 +372,52 @@ function App() {
     }
   }
 
-  async function loadChatgptModels(): Promise<void> {
+  async function grokSignIn(): Promise<void> {
+    if (!("__TAURI_INTERNALS__" in window)) {
+      setSettingsNotice("Open the desktop app to sign in.");
+      return;
+    }
+    setGrokBusy(true);
+    setSettingsNotice("Opening the xAI approval page...");
     try {
-      const models = await commands.chatgptModels();
-      setChatgptModels(models);
-      const first = models[0];
-      if (first && !models.some((item) => item.id === model)) setModel(first.id);
+      const code = await commands.supergrokBeginSignIn();
+      setGrokCode(code);
+      setSettingsNotice("Approve the sign-in in your browser. Code: " + code.userCode);
+      const status = await commands.supergrokFinishSignIn();
+      setGrok(status);
+      setSettingsNotice("Signed in with SuperGrok.");
+      await loadModels("xai");
     } catch (error) {
-      const message = decodeAppError(error).message ?? "Could not load ChatGPT models.";
+      setSettingsNotice(decodeAppError(error).message ?? "SuperGrok sign-in failed.");
+    } finally {
+      setGrokBusy(false);
+      setGrokCode(null);
+    }
+  }
+
+  async function grokSignOut(): Promise<void> {
+    setGrokBusy(true);
+    try {
+      await commands.supergrokSignOut();
+      setGrok({ configured: false, email: null });
+      setSubscriptionModels((previous) => ({ ...previous, xai: [] }));
+      setSettingsNotice("Signed out of SuperGrok.");
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "Could not sign out.");
+    } finally {
+      setGrokBusy(false);
+    }
+  }
+
+  async function loadModels(providerId: string): Promise<void> {
+    try {
+      const models = providerId === "xai" ? await commands.supergrokModels() : await commands.chatgptModels();
+      setSubscriptionModels((previous) => ({ ...previous, [providerId]: models }));
+      const wanted = modelByProvider[providerId];
+      const pick = models.find((item) => item.id === wanted) ?? models.find((item) => item.id === model) ?? models[0];
+      if (pick && providerId === provider && pick.id !== model) chooseModel(pick.id);
+    } catch (error) {
+      const message = decodeAppError(error).message ?? "Could not load models.";
       setSettingsNotice(message);
       setNotice(message);
     }
@@ -405,7 +490,7 @@ function App() {
           presetName: presets.find((item) => item.id === presetId)?.name ?? "Preset",
           presetPrompt: presets.find((item) => item.id === presetId)?.prompt ?? "",
           createdAtUtc: new Date().toISOString(),
-          appVersion: "0.1.3",
+          appVersion: "0.1.4",
         },
       });
       setNotice("PNG copy saved.");
@@ -432,7 +517,7 @@ function App() {
           <p className="muted">Subscription access is the primary path. API credentials are stored in Windows Credential Manager and are only used for providers that expose an official API.</p>
 
           <div className="settings-section subscription-section">
-            <div className="section-heading"><div><span className="overline">Subscription access</span><h3>Use an existing plan</h3></div><span className="status busy">OAuth setup required</span></div>
+            <div className="section-heading"><div><span className="overline">Subscription access</span><h3>Use an existing plan</h3></div><span className={chatgpt.configured || grok.configured ? "status" : "status busy"}>{chatgpt.configured || grok.configured ? "Signed in" : "Not signed in"}</span></div>
             <div className="subscription-grid">
               {providerOptions.filter((item) => item.mode === "subscription").map((item) => <article className="provider-card" key={item.id}>
                 <strong>{item.name}</strong>
@@ -443,13 +528,18 @@ function App() {
                     {chatgptBusy
                       ? <button className="text-button" onClick={() => void commands.chatgptCancelSignIn()}>Cancel sign-in</button>
                       : chatgpt.configured
-                        ? <div className="action-row"><button className="text-button" onClick={() => void loadChatgptModels()}>Refresh models</button><button className="text-button" onClick={() => void chatgptSignOut()}>Sign out</button></div>
+                        ? <div className="action-row"><button className="text-button" onClick={() => void loadModels("chatgpt")}>Refresh models</button><button className="text-button" onClick={() => void chatgptSignOut()}>Sign out</button></div>
                         : <button className="primary-button" onClick={() => void chatgptSignIn()}>Sign in with ChatGPT</button>}
                   </>
                   : <>
-                    <span className="warning">Official sign-in not available</span>
-                    <p>SuperGrok subscription OAuth is not exposed as a public inference API by xAI.</p>
-                    <button className="text-button" disabled onClick={() => undefined}>Sign in unavailable</button>
+                    <span className={grok.configured ? "status" : "warning"}>{grok.configured ? `Signed in${grok.email ? ` as ${grok.email}` : ""}` : "Not signed in"}</span>
+                    <p>Uses your SuperGrok subscription. Sign-in opens xAI in your browser; approve it with the code shown here.</p>
+                    {grokCode && <p><strong>Code: {grokCode.userCode}</strong></p>}
+                    {grokBusy
+                      ? <button className="text-button" onClick={() => void commands.supergrokCancelSignIn()}>Cancel sign-in</button>
+                      : grok.configured
+                        ? <div className="action-row"><button className="text-button" onClick={() => void loadModels("xai")}>Refresh models</button><button className="text-button" onClick={() => void grokSignOut()}>Sign out</button></div>
+                        : <button className="primary-button" onClick={() => void grokSignIn()}>Sign in with SuperGrok</button>}
                   </>}
               </article>)}
             </div>
@@ -459,9 +549,9 @@ function App() {
             <div className="section-heading"><div><span className="overline">API fallback</span><h3>Provider connection</h3></div><span className={credentialConfigured ? "status" : "status busy"}>{credentialConfigured ? "Credential stored" : "Credential not set"}</span></div>
             <div className="settings-form">
               <label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-              {provider === "chatgpt" && chatgptModels.length > 0
-                ? <label>Model<select value={model} onChange={(event) => setModel(event.target.value)}>{chatgptModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-                : <label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="gpt-4.1-mini" /></label>}
+              {providerModels.length > 0
+                ? <label>Model<select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
+                : <label>Model<input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="gpt-4.1-mini" /></label>}
               <label>Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://api.openai.com" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
               <label>API key<input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={credentialConfigured ? "Stored securely; enter to replace" : "Enter provider API key"} autoComplete="off" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
             </div>
@@ -500,9 +590,9 @@ function App() {
           </div>
           <div className="detail-panel">
             <div className="panel-heading"><span className="overline">02 / Describe</span><span className={busy ? "status busy" : "status"} role="status" aria-live="polite">{notice}</span></div>
-             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label>{provider === "chatgpt" && chatgptModels.length > 0
-              ? <label>Model<select value={model} onChange={(event) => setModel(event.target.value)}>{chatgptModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-              : <label>Model<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="vision" />{provider === "chatgpt" && <small className="muted">{chatgpt.configured ? "Loading models..." : "Sign in with ChatGPT in Settings to load models."}</small>}</label>}<label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
+             <div className="controls"><label>Provider<select value={provider} onChange={(event) => selectProvider(event.target.value)}>{providerOptions.map((item) => <option value={item.id} key={item.id} disabled={!item.vision}>{item.name}{item.vision ? "" : " (unavailable)"}</option>)}</select></label>{providerModels.length > 0
+              ? <label>Model<select value={model} onChange={(event) => chooseModel(event.target.value)}>{providerModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
+              : <label>Model<input value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="vision" />{subscriptionProvider && <small className="muted">{subscriptionConfigured ? "Loading models..." : "Sign in with " + subscriptionProvider.name + " in Settings to load models."}</small>}</label>}<label>Preset<select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
             <label className="description-field">Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Your generated description will appear here. You can edit it before saving." /></label>
             <div className="action-row"><button className="primary-button" disabled={!nativePath || busy || !providerOptions.find((item) => item.id === provider)?.vision} onClick={() => void describe()}>{busy ? "Describing..." : "Describe image"}</button><button className="primary-button" disabled={!description.trim() || !nativePath || busy} onClick={() => void save()}>Save PNG copy</button></div>
           </div>

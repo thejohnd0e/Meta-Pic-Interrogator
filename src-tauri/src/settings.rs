@@ -14,6 +14,8 @@ pub struct SettingsFile {
     pub preset_id: Option<String>,
     #[serde(default)]
     pub proxy: Option<crate::network::ProxySettings>,
+    #[serde(default)]
+    pub model_by_provider: std::collections::BTreeMap<String, String>,
     pub presets: Vec<Preset>,
 }
 
@@ -26,6 +28,7 @@ impl Default for SettingsFile {
             endpoint: None,
             preset_id: None,
             proxy: None,
+            model_by_provider: Default::default(),
             presets: vec![
                 Preset {
                     id: "concise".to_owned(),

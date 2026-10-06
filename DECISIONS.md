@@ -60,3 +60,9 @@
 - Decision: Saved PNGs carry the description both as iTXt `Description` and as iTXt `Parameters`; the verified save requires the two to match.
 - Reason: The Eagle "PNG metadata" plugin only reads `Parameters` (Stable Diffusion style). Tools that parse `Parameters` as an SD prompt will show the description as the prompt text.
 - Status: Active.
+
+## 2026-10-06: Support SuperGrok Subscription Sign-In
+
+- Decision: Supersedes the earlier rule to keep SuperGrok disabled. Sign in with the OAuth device code flow (RFC 8628) against auth.x.ai using the shared Grok client id, then call the Responses API on api.x.ai/v1 with the access token. The product treats SuperGrok as a normal supported provider.
+- Reason: The user confirmed this flow works for their subscription in other apps. xAI publishes no third-party OAuth documentation, so the client id and endpoints come from the open-source implementations and the existing LingvoLoc module; xAI decides which accounts get tokens and may change this.
+- Status: Active.
