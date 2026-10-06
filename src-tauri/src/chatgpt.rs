@@ -47,9 +47,8 @@ pub struct ChatGptStatus {
 }
 
 fn auth_client() -> AppResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
+    crate::network::client_builder()?
         .timeout(Duration::from_secs(30))
-        .user_agent("MetaPic-Interrogator/0.1")
         .build()
         .map_err(|_| AppError::Network("ChatGPT client unavailable".to_owned()))
 }
@@ -495,9 +494,8 @@ impl ResponsesTransport {
                 "ChatGPT sign-in and model are required".to_owned(),
             ));
         }
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::network::client_builder()?
             .timeout(Duration::from_secs(180))
-            .user_agent("MetaPic-Interrogator/0.1")
             .build()
             .map_err(|_| AppError::Network("ChatGPT client unavailable".to_owned()))?;
         Ok(Self {

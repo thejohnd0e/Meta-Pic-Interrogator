@@ -128,6 +128,8 @@ pub struct SettingsDocument {
     #[serde(default)]
     pub endpoint: Option<String>,
     pub preset_id: Option<String>,
+    #[serde(default)]
+    pub proxy: Option<crate::network::ProxySettings>,
 }
 
 impl SettingsDocument {

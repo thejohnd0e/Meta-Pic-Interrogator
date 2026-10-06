@@ -225,6 +225,7 @@ pub fn list_presets(app: tauri::AppHandle) -> AppResult<Vec<Preset>> {
 pub fn load_settings(app: tauri::AppHandle) -> AppResult<SettingsDocument> {
     let settings = settings_store(&app)?.load()?;
     Ok(SettingsDocument {
+        proxy: settings.proxy,
         schema_version: settings.schema_version,
         provider_id: settings.provider_id,
         model_id: settings.model_id,
@@ -251,6 +252,31 @@ pub fn save_settings(app: tauri::AppHandle, settings: SettingsDocument) -> AppRe
     current.endpoint = settings.endpoint;
     current.preset_id = settings.preset_id;
     store.save(&current)
+}
+
+/// Rebuilds the process-wide proxy from stored settings and credential.
+pub fn apply_stored_proxy(app: &tauri::AppHandle) -> AppResult<()> {
+    let proxy = settings_store(app)?.load()?.proxy.unwrap_or_default();
+    let password = with_credential_store(|store| store.get(crate::network::PASSWORD_KEY))?;
+    crate::network::apply(crate::network::proxy_url(&proxy, password.as_deref())?);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn save_proxy(app: tauri::AppHandle, proxy: crate::network::ProxySettings) -> AppResult<()> {
+    let mut proxy = proxy;
+    proxy.address = proxy.address.trim().to_owned();
+    proxy.username = proxy
+        .username
+        .map(|user| user.trim().to_owned())
+        .filter(|user| !user.is_empty());
+    // Validate before persisting so a bad value never reaches settings.json.
+    crate::network::proxy_url(&proxy, None)?;
+    let store = settings_store(&app)?;
+    let mut current = store.load()?;
+    current.proxy = Some(proxy);
+    store.save(&current)?;
+    apply_stored_proxy(&app)
 }
 
 #[tauri::command]

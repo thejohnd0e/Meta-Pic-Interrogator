@@ -197,9 +197,8 @@ impl OpenAiTransport {
             ));
         }
         validate_endpoint(endpoint)?;
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::network::client_builder()?
             .timeout(std::time::Duration::from_secs(60))
-            .user_agent("MetaPic-Interrogator/0.1")
             .build()
             .map_err(|_| AppError::Network("provider client unavailable".to_owned()))?;
         Ok(Self {

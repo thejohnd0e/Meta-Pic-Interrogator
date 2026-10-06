@@ -36,12 +36,15 @@ export type Provenance = Readonly<{
 }>;
 export type SaveRequest = Readonly<{ sourcePath: string; destinationPath: string; description: string; provenance: Provenance }>;
 export type AppError = Readonly<{ category: ErrorCategory; message?: string }>;
+export type ProxyKind = "http" | "socks5";
+export type ProxySettings = Readonly<{ enabled: boolean; kind: ProxyKind; address: string; username: string | null }>;
 export type SettingsDocument = Readonly<{
   schemaVersion: number;
   providerId: string | null;
   modelId: string | null;
   endpoint: string | null;
   presetId: string | null;
+  proxy?: ProxySettings | null;
 }>;
 
 const isErrorCategory = (value: unknown): value is ErrorCategory =>

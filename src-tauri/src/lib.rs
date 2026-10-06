@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod domain;
 pub mod image;
 pub mod metadata;
+pub mod network;
 pub mod oauth;
 pub mod providers;
 pub mod settings;
@@ -18,6 +19,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // A broken proxy setting must not prevent the app from starting.
+            let _ = commands::apply_stored_proxy(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             health,
             commands::inspect_image,
@@ -31,6 +37,7 @@ pub fn run() {
             commands::list_presets,
             commands::load_settings,
             commands::save_settings,
+            commands::save_proxy,
             commands::create_preset,
             commands::update_preset,
             commands::delete_preset,

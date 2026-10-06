@@ -16,3 +16,17 @@
 .settings-form input, .controls input { width: 100%; border: 1px solid #e4e0d8; border-radius: 4px; padding: 12px; color: #25231f; background: #f7f6f3; text-transform: none; letter-spacing: 0; }
 .form-notice { margin: 16px 0 0; color: #346538; font-size: 13px; }
 @media (max-width: 760px) { .settings-panel { margin-top: 32px; } .subscription-grid, .settings-form { grid-template-columns: 1fr; } .section-heading { display: grid; } }
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.check-row input {
+  width: auto;
+  margin: 0;
+}

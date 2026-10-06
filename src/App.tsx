@@ -4,7 +4,7 @@ import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "./lib/commands";
-import { decodeAppError, type ChatGptStatus, type VisionModel } from "./lib/contracts";
+import { decodeAppError, type ChatGptStatus, type ProxyKind, type VisionModel } from "./lib/contracts";
 import "./App.css";
 
 type Preset = { id: string; name: string; prompt: string };
@@ -60,6 +60,12 @@ function App() {
   const [notice, setNotice] = useState("Ready for an image");
   const [settings, setSettings] = useState(false);
   const [chatgpt, setChatgpt] = useState<ChatGptStatus>({ configured: false, email: null });
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyKind, setProxyKind] = useState<ProxyKind>("http");
+  const [proxyAddress, setProxyAddress] = useState("");
+  const [proxyUser, setProxyUser] = useState("");
+  const [proxyPassword, setProxyPassword] = useState("");
+  const [proxyPasswordSet, setProxyPasswordSet] = useState(false);
   const [chatgptBusy, setChatgptBusy] = useState(false);
   const [chatgptModels, setChatgptModels] = useState<readonly VisionModel[]>([]);
 
@@ -70,6 +76,12 @@ function App() {
       if (saved.modelId) setModel(saved.modelId);
       if (saved.endpoint) setEndpoint(saved.endpoint);
       if (saved.presetId) setPresetId(saved.presetId);
+      if (saved.proxy) {
+        setProxyEnabled(saved.proxy.enabled);
+        setProxyKind(saved.proxy.kind);
+        setProxyAddress(saved.proxy.address);
+        setProxyUser(saved.proxy.username ?? "");
+      }
       if (storedPresets.length > 0) setPresets(storedPresets as Preset[]);
     }).catch(() => setSettingsNotice("Could not load saved settings."));
   }, []);
@@ -77,6 +89,11 @@ function App() {
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     void commands.chatgptStatus().then(setChatgpt).catch(() => setChatgpt({ configured: false, email: null }));
+  }, []);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    void commands.credentialStatus("proxy-password").then(setProxyPasswordSet).catch(() => setProxyPasswordSet(false));
   }, []);
 
   useEffect(() => {
@@ -230,6 +247,41 @@ function App() {
       setSettingsNotice("Stored credential removed.");
     } catch (error) {
       setSettingsNotice(error instanceof Error ? error.message : "Could not remove credential.");
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function saveProxySettings(): Promise<void> {
+    if (!("__TAURI_INTERNALS__" in window)) {
+      setSettingsNotice("Open the desktop app to save proxy settings.");
+      return;
+    }
+    setSettingsBusy(true);
+    try {
+      if (proxyPassword) {
+        await commands.setCredential("proxy-password", proxyPassword);
+        setProxyPassword("");
+        setProxyPasswordSet(true);
+      }
+      await commands.saveProxy({ enabled: proxyEnabled, kind: proxyKind, address: proxyAddress, username: proxyUser.trim() || null });
+      setSettingsNotice(proxyEnabled ? "Proxy enabled for all requests." : "Proxy disabled.");
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "Could not save proxy settings.");
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
+  async function removeProxyPassword(): Promise<void> {
+    setSettingsBusy(true);
+    try {
+      await commands.deleteCredential("proxy-password");
+      setProxyPasswordSet(false);
+      await commands.saveProxy({ enabled: proxyEnabled, kind: proxyKind, address: proxyAddress, username: proxyUser.trim() || null });
+      setSettingsNotice("Stored proxy password removed.");
+    } catch (error) {
+      setSettingsNotice(decodeAppError(error).message ?? "Could not remove proxy password.");
     } finally {
       setSettingsBusy(false);
     }
@@ -409,6 +461,20 @@ function App() {
               <label>API key<input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={credentialConfigured ? "Stored securely; enter to replace" : "Enter provider API key"} autoComplete="off" disabled={providerOptions.find((item) => item.id === provider)?.mode === "subscription"} /></label>
             </div>
             <div className="action-row"><button className="primary-button" disabled={settingsBusy} onClick={() => void saveProviderSettings()}>{settingsBusy ? "Saving..." : "Save provider settings"}</button>{credentialConfigured && <button className="text-button" disabled={settingsBusy} onClick={() => void removeProviderCredential()}>Remove stored key</button>}</div>
+            {settingsNotice && <p className="form-notice" role="status" aria-live="polite">{settingsNotice}</p>}
+          </div>
+
+          <div className="settings-section">
+            <div className="section-heading"><div><span className="overline">Network</span><h3>Proxy</h3></div><span className={proxyEnabled ? "status" : "status busy"}>{proxyEnabled ? "Proxy on" : "Proxy off"}</span></div>
+            <label className="check-row"><input type="checkbox" checked={proxyEnabled} onChange={(event) => setProxyEnabled(event.target.checked)} /> Use a proxy for all provider and sign-in requests</label>
+            <div className="settings-form">
+              <label>Type<select value={proxyKind} onChange={(event) => setProxyKind(event.target.value as ProxyKind)} disabled={!proxyEnabled}><option value="http">HTTP</option><option value="socks5">SOCKS5</option></select></label>
+              <label>Address<input value={proxyAddress} onChange={(event) => setProxyAddress(event.target.value)} placeholder="127.0.0.1:1080" disabled={!proxyEnabled} autoComplete="off" /></label>
+              <label>User name (optional)<input value={proxyUser} onChange={(event) => setProxyUser(event.target.value)} disabled={!proxyEnabled} autoComplete="off" /></label>
+              <label>Password (optional)<input type="password" value={proxyPassword} onChange={(event) => setProxyPassword(event.target.value)} placeholder={proxyPasswordSet ? "Stored securely; enter to replace" : ""} disabled={!proxyEnabled} autoComplete="off" /></label>
+            </div>
+            <p className="muted">The sign-in page itself opens in your browser and does not use this proxy.</p>
+            <div className="action-row"><button className="primary-button" disabled={settingsBusy} onClick={() => void saveProxySettings()}>{settingsBusy ? "Saving..." : "Save proxy settings"}</button>{proxyPasswordSet && <button className="text-button" disabled={settingsBusy} onClick={() => void removeProxyPassword()}>Remove stored password</button>}</div>
             {settingsNotice && <p className="form-notice" role="status" aria-live="polite">{settingsNotice}</p>}
           </div>
 
